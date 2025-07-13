@@ -1,0 +1,22 @@
+[package]
+name = "autoclickerd"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+signal-hook = "0.3.18"
+evdev-rs = "0.6.2"
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+nix.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+
+version.workspace = true
+common.workspace = true
+
+[lints.clippy]
+needless_return = "allow"
