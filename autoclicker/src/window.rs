@@ -1,0 +1,96 @@
+use gtk4 as gtk;
+use gtk::prelude::*;
+use gtk::{
+	Application,
+	ApplicationWindow,
+};
+
+use std::sync::{Arc, Mutex};
+
+mod widgets;
+
+#[derive(Debug)]
+pub(super) enum MouseButton {
+	Left,
+	Right,
+	Middle,
+}
+
+impl Default for MouseButton {
+	fn default() -> Self {
+    	return Self::Left;
+	}
+}
+
+#[derive(Debug)]
+pub(super) enum ClickType {
+	Single,
+	Double,
+}
+
+impl Default for ClickType {
+	fn default() -> Self {
+    	return Self::Single;
+	}
+}
+
+#[derive(Default, Debug)]
+pub(super) struct Config {
+	mouse_button: MouseButton,
+	typ: ClickType,
+	repeat: Option<u128>,
+	position: (i32, i32),
+	interval: u64,
+}
+
+pub struct Window {
+	app: Application,
+	// config: Arc<Mutex<Config>>,
+}
+
+impl Window {
+	pub fn new<S: Into<String>>(class: S, title: S, width: i32, height: i32) -> Self {
+		let app = Application::builder().application_id(class.into()).build();
+		let title = title.into();
+		app.connect_activate(move |app| {
+			let title = title.clone();
+			Window::build_ui(app, title, width, height);
+		});
+
+		return Self {
+			app
+		};
+	}
+	
+	pub fn run(&self) {
+		self.app.run();
+	}
+
+	fn build_ui(application: &Application, window_name: String, width: i32, height: i32) {
+		let window = ApplicationWindow::new(application);
+
+		window.set_resizable(false);
+		window.set_title(Some(&window_name));
+		window.set_default_size(width, height);
+
+		let container = gtk::Box::builder()
+			.orientation(gtk::Orientation::Vertical)
+			.margin_top(24)
+			.margin_bottom(24)
+			.margin_start(24)
+			.margin_end(24)
+			.halign(gtk::Align::Center)
+			.valign(gtk::Align::Start)
+			.spacing(12)
+			.build();
+		
+		let config = Arc::new(Mutex::new(Config::default()));
+		widgets::click_type(&container, config.clone());
+		widgets::click_repeat(&container, &window, config.clone());
+		widgets::click_position(&container, &window, config);
+		widgets::start_clicking(&container);
+		
+		window.set_child(Some(&container));
+		window.present();
+	}
+}
