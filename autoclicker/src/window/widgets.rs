@@ -158,7 +158,7 @@ fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) -> 
 			break;
 		}
 	}
-	if in_input {
+	if !in_input {
 		tracing::debug!("spawning group dialog");
 		glib::MainContext::default().spawn_local(dialog(window.clone()));
 		return false;
