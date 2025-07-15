@@ -5,7 +5,7 @@ Description=Starts autoclickerd
 Type=simple
 Restart=always
 ExecStart=/usr/bin/autoclickerd
-ExecReload=/usr/bin/kill -HUP $MAINPID
+ExecStop=/usr/bin/kill -HUP $MAINPID
 KillMode=process
 TimeoutSec=180
 
