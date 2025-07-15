@@ -13,7 +13,7 @@ use crate::{ClickType, MouseButton};
 use super::window::Config;
 use common::prelude::*;
 
-fn socket_file() -> String {
+pub fn socket_file() -> String {
 	let id = nix::unistd::geteuid();
 	return format!("/run/user/{}/autoclicker.socket", id);
 }

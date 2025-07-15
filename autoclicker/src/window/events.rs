@@ -94,6 +94,12 @@ fn start_clicking(window: &ApplicationWindow, button: &Button, config: Arc<Mutex
 			break 'outer false;
 		}
 
+		if !std::path::Path::new(&socket::socket_file()).is_file() {
+			tracing::debug!("spawning systemd service dialog");
+			glib::MainContext::default().spawn_local(dialogs::service_dialog(window.clone()));
+			break 'outer false;
+		}
+		
 		if let Err(e) = socket::send_request(config) {
 			gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: socket::send_request", e.to_string()));
 			break 'outer false;
