@@ -1,4 +1,3 @@
-use anyhow::{anyhow, Context};
 use gtk4::{
 	self as gtk, EventControllerFocus, Expression, StringList
 };
@@ -9,102 +8,21 @@ use gtk::{
 };
 
 use std::sync::{Arc, Mutex};
-use std::sync::OnceLock;
-use tokio::runtime::Runtime;
 
 use super::{
 	Config,
 	MouseButton,
 	ClickType,
 	shortcut,
+	runtime,
+	dialogs,
+	events,
 };
-
-use crate::socket;
 
 macro_rules! unfocus_on_enter {
 	($window:ident, $entry:ident) => {{
 		$entry.connect_activate(clone!(#[weak] $window, move |_| gtk4::prelude::GtkWindowExt::set_focus(&$window, None::<&gtk::Widget>)));
 	}};
-}
-
-async fn dialog(window: ApplicationWindow) {
-	let question_dialog = gtk::AlertDialog::builder()
-		.modal(true)
-		.buttons(["Cancel", "Ok"])
-		.message("You must be in the group 'input'. Do you want to be automatically added to it?")
-		.build();
-	
-	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
-
-	if answer == 1 {
-		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
-		runtime().spawn(clone!(
-			#[strong]
-			sender,
-			async move {
-				let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).context("from_uid failed")?.context("from_uid failed")?;
-				let status = tokio::process::Command::new("/usr/bin/pkexec")
-					.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
-					.status().await.context("could not run '/usr/bin/pkexec'")?;
-
-				if !status.success() {
-					return Err(anyhow!("pkexec failed, code: {}", status));
-				}
-				
-				sender.send(Ok(())).await.unwrap();
-				return Ok(());
-			}
-		));
-
-		glib::spawn_future_local(clone!(
-			#[weak]
-			window,
-			async move {
-				while let Ok(response) = receiver.recv().await {
-					match response {
-						Ok(()) => {}
-						Err(e) => {
-							let info_dialog = gtk::AlertDialog::builder()
-								.modal(true)
-								.message("Command failed")
-								.detail(e.to_string())
-								.build();
-							
-							info_dialog.show(Some(&window));
-						}
-					}
-				}
-			}
-		));
-	}
-
-	// if answer == 1 {
-	// 	let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).unwrap().unwrap();
-		
-	// 	let status = std::process::Command::new("/usr/bin/pkexec")
-	// 		.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
-	// 		.status().unwrap();
-
-	// 	if !status.success() {
-	// 		let info_dialog = gtk::AlertDialog::builder()
-	// 			.modal(true)
-	// 			.message("Command failed")
-	// 			.detail(format!("Exit code: {}", status))
-	// 			.build();
-			
-	// 		info_dialog.show(Some(&window));
-	// 	}
-	// }
-}
-
-async fn error_dialog<W: IsA<gtk::Window>>(window: W, msg: String) {
-	let info_dialog = gtk::AlertDialog::builder()
-		.modal(true)
-		.message("Error")
-		.detail(msg)
-		.build();
-
-	info_dialog.show(Some(&window));
 }
 
 macro_rules! only_allow_numbers {
@@ -124,57 +42,17 @@ macro_rules! only_allow_numbers {
 	}};
 }
 
-fn runtime() -> &'static Runtime {
-	static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
-}
-
-fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) -> bool {
-	let groups = match nix::unistd::getgroups() {
-		Ok(g) => g,
-		Err(e) => {
-			gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-			return false;
-		}
-	};
-
-	let mut in_input = false;
-	for group in groups {
-		let group = match nix::unistd::Group::from_gid(group) {
-			Ok(g) => match g {
-				Some(g) => g,
-				None => {
-					gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), "group does not exist".to_string()));
-					return false;
-				}
-			},
-			Err(e) => {
-				gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-				return false;
-			}
-		};
-		if group.name == "input" {
-			in_input = true;
-			break;
-		}
-	}
-	if !in_input {
-		tracing::debug!("spawning group dialog");
-		glib::MainContext::default().spawn_local(dialog(window.clone()));
-		return false;
-	}
-
-	if let Err(e) = socket::send_request(config) {
-		gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-		return false;
-	}
-	
-	return true;
-}
-
 pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>, controller: &gtk::ShortcutController) {
+	let grid = gtk::Grid::builder()
+		.row_spacing(6)
+		.column_spacing(6)
+		.build();
+
 	let button = gtk::Button::with_label("Start");
 	button.add_css_class("suggested-action");
+	button.set_hexpand(true);
+	button.set_size_request(70, -1);
+	grid.attach(&button, 0, 0, 8, 1);
 	
 	let clone = config.clone();
 	shortcut::add_shortcut(controller, "F6", clone!(
@@ -184,24 +62,7 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 		window,
 		move || {
 			let config = clone.clone();
-			let s = button.label().unwrap();
-			if s == "Start" {
-				if !send_request(&window, config) {
-					return;
-				}
-
-				button.remove_css_class("suggested-action");
-				button.add_css_class("destructive-action");
-				button.set_label("Stop");
-			} else if s == "Stop" {
-				if let Err(e) = socket::send_stop() {
-					gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-					return;
-				}
-				button.remove_css_class("destructive-action");
-				button.add_css_class("suggested-action");
-				button.set_label("Start");
-			}
+			events::primary_button(&window, &button, config);
 		}
 	));
 
@@ -211,49 +72,37 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 		window,
 		move |button| {
 			let config = clone.clone();
-			let s = button.label().unwrap();
-			if s == "Start" {
-				if !send_request(&window, config) {
-					return;
-				}
-
-				button.remove_css_class("suggested-action");
-				button.add_css_class("destructive-action");
-				button.set_label("Stop");
-			} else if s == "Stop" {
-				if let Err(e) = socket::send_stop() {
-					gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-					return;
-				}
-				button.remove_css_class("destructive-action");
-				button.add_css_class("suggested-action");
-				button.set_label("Start");
-			}
+			events::primary_button(&window, button, config);
 		}
 	));
 
-	container.append(&button);
-}
-
-async fn get_coords() -> anyhow::Result<(i32, i32)> {
-	let output = tokio::process::Command::new("/usr/bin/slurp")
-		.args(["-b", "#00000000", "-p", "-f", "%x %y"])
-		.output().await.context("could not run '/usr/bin/slurp'")?;
-
-	if !output.status.success() {
-		return Err(anyhow!("slurp failed, code: {}", output.status));
-	}
+	let button = gtk::Button::with_label("About");
+	button.set_hexpand(true);
+	button.set_size_request(30, -1);
+	grid.attach(&button, 8, 0, 2, 1);
 	
-	let output = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
-	tracing::debug!(slurp_output = output);
-	
-	let pos: Vec<&str> = output.split(" ").collect();
-	if pos.len() != 2 {
-		return Err(anyhow!("invalid slurp output"));
-	}
+	let bytes = glib::Bytes::from_static(include_bytes!("../../../assets/icon.svg"));
+	let logo = gtk::gdk::Texture::from_bytes(&bytes).expect("gtk-rs.svg to load");
+	button.connect_clicked(clone!(
+		#[weak]
+		window,
+		move |_| {
+			let dialog = gtk::AboutDialog::builder()
+				.transient_for(&window)
+				.modal(true)
+				.program_name("Autoclicker")
+				.version(version::version)
+				.website("https://codeberg.org/Land/autoclicker")
+				.license_type(gtk::License::MitX11)
+				.authors(["Sam Jones"])
+				.logo(&logo)
+				.build();
+			
+			dialog.present();
+		}
+	));
 
-	let pos: (i32, i32) = (pos[0].parse().context("invalid slurp output")?, pos[1].parse().context("invalid slurp output")?);
-	return Ok(pos);
+	container.append(&grid);
 }
 
 pub fn click_position(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
@@ -342,7 +191,7 @@ pub fn click_position(container: &gtk::Box, window: &ApplicationWindow, config: 
 					#[strong]
 					sender,
 					async move {
-						let res = get_coords().await;
+						let res = events::get_coords().await;
 						sender.send(res).await.unwrap();
 					}
 				));
@@ -371,62 +220,12 @@ pub fn click_position(container: &gtk::Box, window: &ApplicationWindow, config: 
 							}
 							
 							Err(e) => {
-								let info_dialog = gtk::AlertDialog::builder()
-									.modal(true)
-									.message("Command failed")
-									.detail(e.to_string())
-									.build();
-								
-								info_dialog.show(Some(&window));
+								dialogs::error_dialog(window.clone(), "Command failed", e.to_string()).await;
 							}
 						}
 					}
 				}
 			));
-			// set_pos_btn.connect_clicked(clone!(
-			// 	#[weak]
-			// 	x_entry,
-			// 	#[weak]
-			// 	y_entry,
-			// 	#[weak]
-			// 	window,
-			// 	move |btn| {
-			// 		let clone = btn.clone();
-			// 		gtk::glib::MainContext::default().spawn_local(async move {
-			// 			clone.set_label("Click anywhere to save the position");
-			// 			let output = std::process::Command::new("/usr/bin/slurp")
-			// 				.args(["-b", "#00000000", "-p"])
-			// 				.output();
-						
-			// 			match output {
-			// 				Ok(output) => {
-			// 					if !output.status.success() {
-			// 						let info_dialog = gtk::AlertDialog::builder()
-			// 							.modal(true)
-			// 							.message("Command failed")
-			// 							.detail(format!("Exit code: {}", output.status))
-			// 							.build();
-									
-			// 						info_dialog.show(Some(&window));
-			// 					}
-								
-			// 					let output = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
-			// 					tracing::debug!(slurp_output = output);
-			// 				}
-							
-			// 				Err(err) => {
-			// 					let info_dialog = gtk::AlertDialog::builder()
-			// 						.modal(true)
-			// 						.message("Command failed")
-			// 						.detail(err.to_string())
-			// 						.build();
-								
-			// 					info_dialog.show(Some(&window));
-			// 				}
-			// 			}
-			// 		});
-			// 	}
-			// ));
 			grid.attach(&set_pos_btn, 1, 1, 1, 1);
 		}
 		

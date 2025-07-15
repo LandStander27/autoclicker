@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
 		.compact()
 		.with_file(false)
 		.with_line_number(false)
-		.with_thread_ids(false)
+		.with_thread_ids(true)
 		.with_target(true)
 		.with_max_level(if cfg!(debug_assertions) { Level::TRACE } else { Level::DEBUG })
 		.without_time()

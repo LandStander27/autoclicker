@@ -10,4 +10,6 @@ anyhow = "1.0.98"
 
 [lints.clippy]
 needless_return = "allow"
+
+[lints.rust]
 non_upper_case_globals = "allow"

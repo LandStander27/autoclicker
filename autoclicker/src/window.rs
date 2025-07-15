@@ -1,4 +1,4 @@
-use gtk4::{self as gtk, glib};
+use gtk4 as gtk;
 use gtk::prelude::*;
 use gtk::{
 	Application,
@@ -6,9 +6,18 @@ use gtk::{
 };
 
 use std::sync::{Arc, Mutex};
+use std::sync::OnceLock;
+use tokio::runtime::Runtime;
 
 mod widgets;
 mod shortcut;
+mod dialogs;
+mod events;
+
+fn runtime() -> &'static Runtime {
+	static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
+}
 
 #[derive(Debug)]
 pub(super) enum MouseButton {
@@ -46,7 +55,6 @@ pub(super) struct Config {
 
 pub struct Window {
 	app: Application,
-	// config: Arc<Mutex<Config>>,
 }
 
 impl Window {
