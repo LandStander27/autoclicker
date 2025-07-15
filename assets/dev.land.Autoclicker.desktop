@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Autoclicker
+Comment=An autoclicker
+Type=Application
+Exec=autoclicker
+Terminal=false
+Categories=Utility;
+Keywords=Clicker;
+Icon=dev.land.Autoclicker
+StartupNotify=true
