@@ -27,7 +27,7 @@ macro_rules! unfocus_on_enter {
 	}};
 }
 
-async fn dialog<W: IsA<gtk::Window>>(window: W) {
+async fn dialog(window: ApplicationWindow) {
 	let question_dialog = gtk::AlertDialog::builder()
 		.modal(true)
 		.buttons(["Cancel", "Ok"])
@@ -35,7 +35,49 @@ async fn dialog<W: IsA<gtk::Window>>(window: W) {
 		.build();
 	
 	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
-	
+
+	if answer == 1 {
+		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
+		runtime().spawn(clone!(
+			#[strong]
+			sender,
+			async move {
+				let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).context("from_uid failed")?.context("from_uid failed")?;
+				let status = tokio::process::Command::new("/usr/bin/pkexec")
+					.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
+					.status().await.context("could not run '/usr/bin/pkexec'")?;
+
+				if !status.success() {
+					return Err(anyhow!("pkexec failed, code: {}", status));
+				}
+				
+				sender.send(Ok(())).await.unwrap();
+				return Ok(());
+			}
+		));
+
+		glib::spawn_future_local(clone!(
+			#[weak]
+			window,
+			async move {
+				while let Ok(response) = receiver.recv().await {
+					match response {
+						Ok(()) => {}
+						Err(e) => {
+							let info_dialog = gtk::AlertDialog::builder()
+								.modal(true)
+								.message("Command failed")
+								.detail(e.to_string())
+								.build();
+							
+							info_dialog.show(Some(&window));
+						}
+					}
+				}
+			}
+		));
+	}
+
 	// if answer == 1 {
 	// 	let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).unwrap().unwrap();
 		
@@ -87,12 +129,12 @@ fn runtime() -> &'static Runtime {
 	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
 }
 
-fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) {
+fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) -> bool {
 	let groups = match nix::unistd::getgroups() {
 		Ok(g) => g,
 		Err(e) => {
 			gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-			return;
+			return false;
 		}
 	};
 
@@ -103,12 +145,12 @@ fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) {
 				Some(g) => g,
 				None => {
 					gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), "group does not exist".to_string()));
-					return;
+					return false;
 				}
 			},
 			Err(e) => {
 				gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-				return;
+				return false;
 			}
 		};
 		if group.name == "input" {
@@ -116,17 +158,18 @@ fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) {
 			break;
 		}
 	}
-	if !in_input {
+	if in_input {
 		tracing::debug!("spawning group dialog");
-		gtk::glib::MainContext::default().spawn_local(dialog(window.clone()));
-		tracing::trace!("spawning group dialog");
-		return;
+		glib::MainContext::default().spawn_local(dialog(window.clone()));
+		return false;
 	}
 
 	if let Err(e) = socket::send_request(config) {
 		gtk::glib::MainContext::default().spawn_local(error_dialog(window.clone(), e.to_string()));
-		return;
+		return false;
 	}
+	
+	return true;
 }
 
 pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>, controller: &gtk::ShortcutController) {
@@ -143,7 +186,10 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 			let config = clone.clone();
 			let s = button.label().unwrap();
 			if s == "Start" {
-				send_request(&window, config);
+				if !send_request(&window, config) {
+					return;
+				}
+
 				button.remove_css_class("suggested-action");
 				button.add_css_class("destructive-action");
 				button.set_label("Stop");
@@ -158,7 +204,7 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 			}
 		}
 	));
-	
+
 	let clone = config.clone();
 	button.connect_clicked(clone!(
 		#[weak]
@@ -167,7 +213,10 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 			let config = clone.clone();
 			let s = button.label().unwrap();
 			if s == "Start" {
-				send_request(&window, config);
+				if !send_request(&window, config) {
+					return;
+				}
+
 				button.remove_css_class("suggested-action");
 				button.add_css_class("destructive-action");
 				button.set_label("Stop");
@@ -191,6 +240,10 @@ async fn get_coords() -> anyhow::Result<(i32, i32)> {
 		.args(["-b", "#00000000", "-p", "-f", "%x %y"])
 		.output().await.context("could not run '/usr/bin/slurp'")?;
 
+	if !output.status.success() {
+		return Err(anyhow!("slurp failed, code: {}", output.status));
+	}
+	
 	let output = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
 	tracing::debug!(slurp_output = output);
 	
