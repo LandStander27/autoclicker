@@ -1,4 +1,4 @@
-use gtk4 as gtk;
+use gtk4::{self as gtk, glib};
 use gtk::prelude::*;
 use gtk::{
 	Application,
@@ -8,6 +8,7 @@ use gtk::{
 use std::sync::{Arc, Mutex};
 
 mod widgets;
+mod shortcut;
 
 #[derive(Debug)]
 pub(super) enum MouseButton {
@@ -36,11 +37,11 @@ impl Default for ClickType {
 
 #[derive(Default, Debug)]
 pub(super) struct Config {
-	mouse_button: MouseButton,
-	typ: ClickType,
-	repeat: Option<u128>,
-	position: (i32, i32),
-	interval: u64,
+	pub mouse_button: MouseButton,
+	pub typ: ClickType,
+	pub repeat: Option<u128>,
+	pub position: (Option<i32>, Option<i32>),
+	pub interval: u64,
 }
 
 pub struct Window {
@@ -84,12 +85,14 @@ impl Window {
 			.spacing(12)
 			.build();
 		
+		let controller = gtk::ShortcutController::new();
 		let config = Arc::new(Mutex::new(Config::default()));
 		widgets::click_type(&container, config.clone());
 		widgets::click_repeat(&container, &window, config.clone());
-		widgets::click_position(&container, &window, config);
-		widgets::start_clicking(&container);
-		
+		widgets::click_position(&container, &window, config.clone());
+		widgets::start_clicking(&container, &window, config, &controller);
+
+		window.add_controller(controller);
 		window.set_child(Some(&container));
 		window.present();
 	}

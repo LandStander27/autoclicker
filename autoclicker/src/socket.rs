@@ -1,0 +1,72 @@
+use std::{
+	io::{Read, Write},
+	os::unix::net::UnixStream,
+	sync::{
+		Arc,
+		Mutex
+	}
+};
+
+use anyhow::Context;
+use crate::{ClickType, MouseButton};
+
+use super::window::Config;
+use common::prelude::*;
+
+fn socket_file() -> String {
+	let id = nix::unistd::geteuid();
+	return format!("/run/user/{}/autoclicker.socket", id);
+}
+
+pub fn send_stop() -> anyhow::Result<()> {
+	let mut stream = UnixStream::connect(socket_file()).context("could not connect to socket")?;
+	let request = Message::StopClicking(StopClicking {});
+
+	let json = Message::encode(&request).context("could not encode as json")?;
+	stream.write(json.as_bytes()).context("could not write to socket")?;
+	
+	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	let mut msg = String::new();
+	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	let response = Message::decode(msg).context("could not decode json")?;
+	
+	if let Message::Error(e) = response {
+		return Err(anyhow::anyhow!(e.msg));
+	}
+
+	return Ok(());
+}
+
+pub fn send_request(config: Arc<Mutex<Config>>) -> anyhow::Result<()> {
+	let config = config.lock().unwrap();
+	let mut stream = UnixStream::connect(socket_file()).context("could not connect to socket")?;
+	let request = Message::RepeatingClick(RepeatingClick {
+		button: match config.mouse_button {
+			MouseButton::Left => "left",
+			MouseButton::Right => "right",
+			MouseButton::Middle => "middle",
+		}.to_string(),
+		typ: match config.typ {
+			ClickType::Single => "single",
+			ClickType::Double => "double",
+		}.to_string(),
+		amount: config.repeat.unwrap_or(0) as u64,
+		interval: config.interval,
+		position: config.position,
+		delay_until_first_click: 2000,
+	});
+
+	let json = Message::encode(&request).context("could not encode as json")?;
+	stream.write(json.as_bytes()).context("could not write to socket")?;
+	
+	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	let mut msg = String::new();
+	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	let response = Message::decode(msg).context("could not decode json")?;
+	
+	if let Message::Error(e) = response {
+		return Err(anyhow::anyhow!(e.msg));
+	}
+
+	return Ok(());
+}

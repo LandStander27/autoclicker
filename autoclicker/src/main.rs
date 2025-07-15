@@ -13,7 +13,8 @@ use tracing::{debug, warn, error, info, trace, Level};
 
 mod window;
 use window::*;
-use common::prelude::*;
+
+mod socket;
 
 fn main() -> anyhow::Result<()> {
 	let subscriber = tracing_subscriber::fmt()

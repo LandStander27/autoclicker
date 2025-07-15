@@ -4,7 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-gtk4 = "0.9.7"
+gtk4 = { version = "0.9.7", features = [ "v4_10" ]}
+tokio = { version = "1.46.1", features = [ "rt", "rt-multi-thread", "process" ] }
+async-channel = "2.5.0"
 
 tracing.workspace = true
 tracing-subscriber.workspace = true

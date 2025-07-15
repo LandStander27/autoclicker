@@ -5,6 +5,7 @@ use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
 pub enum MouseButton {
 	Left,
 	Right,
+	Middle,
 }
 
 #[allow(unused)]
@@ -27,7 +28,7 @@ impl Mouse {
 		
 		mouse.enable(EventCode::EV_REL(EV_REL::REL_X)).context("could not enable rel_x")?;
 		mouse.enable(EventCode::EV_REL(EV_REL::REL_Y)).context("could not enable rel_y")?;
-
+		
 		mouse.enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT)).context("could not enable SYN_REPORT")?;
 		
 		let input = UInputDevice::create_from_device(&mouse).context("could not create input device")?;
@@ -36,6 +37,26 @@ impl Mouse {
 			mouse,
 			input,
 		});
+	}
+
+	pub fn move_mouse(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
+		if x.is_some() {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_X), i32::MIN)?;
+		}
+		if y.is_some() {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), i32::MIN)?;
+		}
+		self.send_sync()?;
+
+		if let Some(x) = x {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_X), x)?;
+		}
+		if let Some(y) = y {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), y)?;
+		}
+		self.send_sync()?;
+		
+		return Ok(());
 	}
 
 	pub fn click_button(&self, button: MouseButton) -> anyhow::Result<()> {
@@ -53,6 +74,14 @@ impl Mouse {
 				self.send_sync()?;
 				
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_RIGHT), 0)?;
+				self.send_sync()?;
+			}
+			
+			MouseButton::Middle => {
+				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE), 1)?;
+				self.send_sync()?;
+				
+				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE), 0)?;
 				self.send_sync()?;
 			}
 		}
