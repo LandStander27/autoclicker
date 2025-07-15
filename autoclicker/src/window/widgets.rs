@@ -36,23 +36,23 @@ async fn dialog<W: IsA<gtk::Window>>(window: W) {
 	
 	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
 	
-	if answer == 1 {
-		let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).unwrap().unwrap();
+	// if answer == 1 {
+	// 	let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).unwrap().unwrap();
 		
-		let status = std::process::Command::new("/usr/bin/pkexec")
-			.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
-			.status().unwrap();
+	// 	let status = std::process::Command::new("/usr/bin/pkexec")
+	// 		.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
+	// 		.status().unwrap();
 
-		if !status.success() {
-			let info_dialog = gtk::AlertDialog::builder()
-				.modal(true)
-				.message("Command failed")
-				.detail(format!("Exit code: {}", status))
-				.build();
+	// 	if !status.success() {
+	// 		let info_dialog = gtk::AlertDialog::builder()
+	// 			.modal(true)
+	// 			.message("Command failed")
+	// 			.detail(format!("Exit code: {}", status))
+	// 			.build();
 			
-			info_dialog.show(Some(&window));
-		}
-	}
+	// 		info_dialog.show(Some(&window));
+	// 	}
+	// }
 }
 
 async fn error_dialog<W: IsA<gtk::Window>>(window: W, msg: String) {
@@ -117,7 +117,10 @@ fn send_request(window: &gtk::ApplicationWindow, config: Arc<Mutex<Config>>) {
 		}
 	}
 	if !in_input {
+		tracing::debug!("spawning group dialog");
 		gtk::glib::MainContext::default().spawn_local(dialog(window.clone()));
+		tracing::trace!("spawning group dialog");
+		return;
 	}
 
 	if let Err(e) = socket::send_request(config) {
