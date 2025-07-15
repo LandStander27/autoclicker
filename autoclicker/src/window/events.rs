@@ -94,7 +94,9 @@ fn start_clicking(window: &ApplicationWindow, button: &Button, config: Arc<Mutex
 			break 'outer false;
 		}
 
-		if !std::path::Path::new(&socket::socket_file()).is_file() {
+		let s = socket::socket_file();
+		let file = std::path::Path::new(&s);
+		if !file.exists() || (!file.is_dir() && !file.is_file()) {
 			tracing::debug!("spawning systemd service dialog");
 			glib::MainContext::default().spawn_local(dialogs::service_dialog(window.clone()));
 			break 'outer false;
