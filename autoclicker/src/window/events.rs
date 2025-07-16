@@ -16,6 +16,7 @@ use super::{
 };
 
 use crate::socket;
+use crate::unix;
 
 pub async fn get_coords() -> anyhow::Result<(i32, i32)> {
 	let output = tokio::process::Command::new("/usr/bin/slurp")
@@ -60,34 +61,14 @@ fn stop_clicking(window: &ApplicationWindow, button: &Button) {
 
 fn start_clicking(window: &ApplicationWindow, button: &Button, config: Arc<Mutex<Config>>) {
 	let status = 'outer: {
-		let groups = match nix::unistd::getgroups() {
-			Ok(g) => g,
+		let in_input = match unix::is_user_in_group("input") {
+			Ok(o) => o,
 			Err(e) => {
-				gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: getgroups", e.to_string()));
+				gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: unix::is_user_in_group", e.to_string()));
 				break 'outer false;
 			}
 		};
 
-		let mut in_input = false;
-		for group in groups {
-			let group = match nix::unistd::Group::from_gid(group) {
-				Ok(g) => match g {
-					Some(g) => g,
-					None => {
-						gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: from_gid", "group does not exist".to_string()));
-						break 'outer false;
-					}
-				},
-				Err(e) => {
-					gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: from_gid", e.to_string()));
-					break 'outer false;
-				}
-			};
-			if group.name == "input" {
-				in_input = true;
-				break;
-			}
-		}
 		if !in_input {
 			tracing::debug!("spawning group dialog");
 			glib::MainContext::default().spawn_local(dialogs::group_dialog(window.clone()));
@@ -107,7 +88,7 @@ fn start_clicking(window: &ApplicationWindow, button: &Button, config: Arc<Mutex
 			break 'outer false;
 		}
 		
-		true
+		break 'outer true;
 	};
 	
 	if !status {

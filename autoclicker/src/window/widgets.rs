@@ -378,7 +378,6 @@ pub fn click_repeat(container: &gtk::Box, window: &ApplicationWindow, config: Ar
 
 			entry.set_sensitive(false);
 			entry.set_placeholder_text(Some("Amount"));
-			// only_allow_numbers!(entry);
 			unfocus_on_enter!(window, entry);
 			
 			let config_clone = config.clone();

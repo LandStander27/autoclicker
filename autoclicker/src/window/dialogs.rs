@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use gtk4 as gtk;
 use gtk::{
 	ApplicationWindow,
@@ -6,6 +6,7 @@ use gtk::{
 };
 
 use super::runtime;
+use crate::unix;
 
 pub async fn error_dialog(window: gtk::ApplicationWindow, title: &str, msg: String) {
 	tracing::debug!("opening error dialog");
@@ -31,17 +32,7 @@ pub async fn enable_service_dialog(window: ApplicationWindow) {
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			let status = tokio::process::Command::new("/usr/bin/systemctl")
-				.args(["--user", "enable", "autoclickerd.service"])
-				.status().await.context("could not run '/usr/bin/systemctl'")?;
-
-			if !status.success() {
-				sender.send(Err(anyhow!("systemctl failed, code: {}", status))).await.unwrap();
-				return Err(anyhow!("systemctl failed, code: {}", status));
-			}
-
-			sender.send(Ok(())).await.unwrap();
-			return Ok(());
+			sender.send(unix::enable_systemd_service("autoclickerd.service").await).await.context("could not send over channel").unwrap();
 		});
 		
 		glib::spawn_future_local(clone!(
@@ -69,17 +60,7 @@ pub async fn service_dialog(window: ApplicationWindow) {
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			let status = tokio::process::Command::new("/usr/bin/systemctl")
-				.args(["--user", "start", "autoclickerd.service"])
-				.status().await.context("could not run '/usr/bin/systemctl'")?;
-
-			if !status.success() {
-				sender.send(Err(anyhow!("systemctl failed, code: {}", status))).await.unwrap();
-				return Err(anyhow!("systemctl failed, code: {}", status));
-			}
-
-			sender.send(Ok(())).await.unwrap();
-			return Ok(());
+			sender.send(unix::start_systemd_service("autoclickerd.service").await).await.context("could not send over channel").unwrap();
 		});
 		
 		glib::spawn_future_local(clone!(
@@ -111,18 +92,7 @@ pub async fn group_dialog(window: ApplicationWindow) {
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			let user = nix::unistd::User::from_uid(nix::unistd::geteuid()).context("from_uid failed")?.context("from_uid failed")?;
-			let status = tokio::process::Command::new("/usr/bin/pkexec")
-				.args(["sh", "-c", format!("/usr/bin/usermod -aG input '{}'", user.name).as_str()])
-				.status().await.context("could not run '/usr/bin/pkexec'")?;
-
-			if !status.success() {
-				sender.send(Err(anyhow!("pkexec failed, code: {}", status))).await.unwrap();
-				return Err(anyhow!("pkexec failed, code: {}", status));
-			}
-			
-			sender.send(Ok(())).await.unwrap();
-			return Ok(());
+			sender.send(unix::add_user_to_group("input").await).await.context("could not send over channel").unwrap();
 		});
 
 		glib::spawn_future_local(clone!(
