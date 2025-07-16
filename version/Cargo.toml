@@ -3,4 +3,5 @@ name = "version"
 version = "0.0.0"
 edition = "2024"
 
-[dependencies]
+[build-dependencies]
+vergen-git2 = { version = "1.0.7", features = ["build"] }

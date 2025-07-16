@@ -17,3 +17,5 @@ serde = "1.0.219"
 
 version = { path = "version" }
 common = { path = "common" }
+
+# [workspace.build-dependencies]

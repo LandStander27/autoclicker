@@ -28,6 +28,7 @@ fn main() -> anyhow::Result<()> {
 		.finish();
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 	
+	info!("autoclicker {}", version::version);
 	trace!("registered logger");
 	
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
