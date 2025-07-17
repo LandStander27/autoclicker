@@ -42,9 +42,9 @@ install -Dm755 "target/release/autoclicker" "/usr/bin/autoclicker"
 install -Dm755 "target/release/autoclickerd" "/usr/bin/autoclickerd"
 
 # Install license file, icon, and desktop file
-install -Dm644 "${srcdir}/${pkgname}/LICENSE" -t "$pkgdir/usr/share/licenses/$pkgname/"
-install -Dm644 "${srcdir}/${pkgname}/assets/icon.svg" -T "$pkgdir/usr/share/icons/hicolor/scalable/apps/dev.land.Autoclicker.svg"
-install -Dm644 "${srcdir}/${pkgname}/assets/dev.land.Autoclicker.desktop" -t "$pkgdir/usr/share/applications/"
+install -Dm644 "LICENSE" -t "/usr/share/licenses/autoclicker/"
+install -Dm644 "assets/icon.svg" -T "/usr/share/icons/hicolor/scalable/apps/dev.land.Autoclicker.svg"
+install -Dm644 "assets/dev.land.Autoclicker.desktop" -t "/usr/share/applications/"
 
 # install systemd service
 install -Dm644 "assets/autoclickerd.service" -t "/usr/lib/systemd/user/"
