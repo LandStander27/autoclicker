@@ -16,6 +16,7 @@ use window::*;
 
 mod socket;
 mod unix;
+mod shortcuts;
 
 fn main() -> anyhow::Result<()> {
 	let subscriber = tracing_subscriber::fmt()

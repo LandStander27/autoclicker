@@ -3,6 +3,7 @@ use gtk::prelude::*;
 use gtk::{
 	Application,
 	ApplicationWindow,
+	glib,
 };
 
 use std::sync::{Arc, Mutex};
@@ -93,14 +94,22 @@ impl Window {
 			.spacing(12)
 			.build();
 		
-		let controller = gtk::ShortcutController::new();
+		// let controller = gtk::ShortcutController::new();
 		let config = Arc::new(Mutex::new(Config::default()));
 		widgets::click_type(&container, config.clone());
 		widgets::click_repeat(&container, &window, config.clone());
 		widgets::click_position(&container, &window, config.clone());
-		widgets::start_clicking(&container, &window, config, &controller);
+		widgets::start_clicking(&container, &window, config);
+		
+		// let action = gtk::gio::SimpleAction::new("toggle-clicking", None);
+		// action.connect_activate(|_, _| {
+		// 	tracing::trace!("clicking was toggled");
+		// });
+		// window.add_action(&action);
 
-		window.add_controller(controller);
+		// crate::shortcuts::start_session(&window, &window);
+		
+		// window.add_controller(controller);
 		window.set_child(Some(&container));
 		window.present();
 	}

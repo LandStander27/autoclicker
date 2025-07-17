@@ -94,7 +94,7 @@ fn start_clicking(window: &ApplicationWindow, button: &Button, config: Arc<Mutex
 	if !status {
 		return;
 	}
-
+	
 	button.remove_css_class("suggested-action");
 	button.add_css_class("destructive-action");
 	button.set_label("Stop");

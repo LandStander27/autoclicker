@@ -42,7 +42,7 @@ macro_rules! only_allow_numbers {
 	}};
 }
 
-pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>, controller: &gtk::ShortcutController) {
+pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 	let grid = gtk::Grid::builder()
 		.row_spacing(6)
 		.column_spacing(6)
@@ -54,17 +54,17 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 	button.set_size_request(70, -1);
 	grid.attach(&button, 0, 0, 8, 1);
 	
-	let clone = config.clone();
-	shortcut::add_shortcut(controller, "F6", clone!(
-		#[weak]
-		button,
-		#[weak]
-		window,
-		move || {
-			let config = clone.clone();
-			events::primary_button(&window, &button, config);
-		}
-	));
+	// let clone = config.clone();
+	// shortcut::add_shortcut(controller, "F6", clone!(
+	// 	#[weak]
+	// 	button,
+	// 	#[weak]
+	// 	window,
+	// 	move || {
+	// 		let config = clone.clone();
+	// 		events::primary_button(&window, &button, config);
+	// 	}
+	// ));
 
 	let clone = config.clone();
 	button.connect_clicked(clone!(
@@ -75,6 +75,33 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 			events::primary_button(&window, button, config);
 		}
 	));
+
+	window.connect_map(move |window| {
+		let clone = config.clone();
+		gtk::glib::MainContext::default().spawn_local(glib::clone!(
+			#[weak]
+			window,
+			#[weak]
+			button,
+			async move {
+				// gtk::glib::timeout_future(std::time::Duration::from_secs(1)).await;
+				crate::shortcuts::start_session(&window).await.unwrap();
+				crate::shortcuts::listen_events(move || {
+					events::primary_button(&window, &button, clone.clone());
+				}).await.unwrap();
+			}
+		));
+	});
+	
+	window.connect_close_request(|_| {
+		runtime().block_on(async {
+			if let Err(e) = crate::shortcuts::stop_session().await {
+				tracing::error!("could not close session: {e}");
+			}
+		});
+
+		return glib::Propagation::Proceed;
+	});
 
 	let button = gtk::Button::with_label("About");
 	button.set_hexpand(true);
