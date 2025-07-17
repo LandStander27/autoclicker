@@ -13,7 +13,7 @@ use super::{
 	Config,
 	MouseButton,
 	ClickType,
-	shortcut,
+	// shortcut,
 	runtime,
 	dialogs,
 	events,
@@ -53,18 +53,6 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 	button.set_hexpand(true);
 	button.set_size_request(70, -1);
 	grid.attach(&button, 0, 0, 8, 1);
-	
-	// let clone = config.clone();
-	// shortcut::add_shortcut(controller, "F6", clone!(
-	// 	#[weak]
-	// 	button,
-	// 	#[weak]
-	// 	window,
-	// 	move || {
-	// 		let config = clone.clone();
-	// 		events::primary_button(&window, &button, config);
-	// 	}
-	// ));
 
 	let clone = config.clone();
 	button.connect_clicked(clone!(
@@ -84,7 +72,6 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 			#[weak]
 			button,
 			async move {
-				// gtk::glib::timeout_future(std::time::Duration::from_secs(1)).await;
 				crate::shortcuts::start_session(&window).await.unwrap();
 				crate::shortcuts::listen_events(move || {
 					events::primary_button(&window, &button, clone.clone());

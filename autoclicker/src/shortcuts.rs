@@ -54,7 +54,7 @@ pub async fn listen_events<F: Fn()>(func: F) -> anyhow::Result<()> {
 pub async fn start_session<W: IsA<gtk::Widget>>(widget: &W) -> anyhow::Result<()> {
 	let root = widget.native().unwrap();
 	let ident = WindowIdentifier::from_native(&root).await;
-	let shortcut = NewShortcut::new("toggle-clicking", "Toggle clicking");
+	let shortcut = NewShortcut::new("toggle-clicking", "Toggle clicking").preferred_trigger("F6");
 	
 	let shortcuts = GlobalShortcuts::new().await.context("could not get GlobalShortcuts portal")?;
 	let session = shortcuts.create_session().await.context("could not create GlobalShortcuts session")?;

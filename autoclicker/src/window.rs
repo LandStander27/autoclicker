@@ -3,7 +3,6 @@ use gtk::prelude::*;
 use gtk::{
 	Application,
 	ApplicationWindow,
-	glib,
 };
 
 use std::sync::{Arc, Mutex};
@@ -11,7 +10,7 @@ use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 
 mod widgets;
-mod shortcut;
+// mod shortcut;
 mod dialogs;
 mod events;
 
@@ -100,14 +99,6 @@ impl Window {
 		widgets::click_repeat(&container, &window, config.clone());
 		widgets::click_position(&container, &window, config.clone());
 		widgets::start_clicking(&container, &window, config);
-		
-		// let action = gtk::gio::SimpleAction::new("toggle-clicking", None);
-		// action.connect_activate(|_, _| {
-		// 	tracing::trace!("clicking was toggled");
-		// });
-		// window.add_action(&action);
-
-		// crate::shortcuts::start_session(&window, &window);
 		
 		// window.add_controller(controller);
 		window.set_child(Some(&container));
