@@ -288,12 +288,19 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			focus_controller.connect_leave(clone!(
 				#[weak]
 				entry,
+				#[weak]
+				window,
 				move |_| {
 					only_allow_numbers!(entry);
 					let mut config = config_clone.lock().unwrap();
 					let num = entry.text();
 					if !num.is_empty() {
-						config.mouse.interval = num.parse().unwrap();
+						let num = num.parse().unwrap();
+						if num < 25 {
+							gtk::glib::MainContext::default().spawn_local(dialogs::short_duration_dialog(window.clone()));
+						} else {
+							config.mouse.interval = num;
+						}
 					}
 					tracing::debug!(?config);
 				}

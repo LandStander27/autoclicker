@@ -120,3 +120,14 @@ async fn reboot_dialog(window: &ApplicationWindow) {
 
 	info_dialog.show(Some(window));
 }
+
+pub async fn short_duration_dialog(window: ApplicationWindow) {
+	tracing::debug!("opening short duration dialog");
+	let info_dialog = gtk::AlertDialog::builder()
+		.modal(true)
+		.message("Duration too short")
+		.detail("With an interval of <25ms, your computer can have intense amounts of lag. Please set 'interval' higher.")
+		.build();
+
+	info_dialog.show(Some(&window));
+}
