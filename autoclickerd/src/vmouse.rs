@@ -1,6 +1,6 @@
 use anyhow::Context;
-use evdev_rs::enums::{int_to_ev_key, BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
-use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
+use evdev_rs::enums::{BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
+use evdev_rs::{DeviceWrapper, UInputDevice, UninitDevice};
 
 use crate::vdevice::*;
 
@@ -62,16 +62,6 @@ impl Mouse {
 		if let Some(y) = y {
 			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), y)?;
 		}
-		self.send_sync()?;
-		
-		return Ok(());
-	}
-
-	pub fn click_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
-		self.send_event(EventCode::EV_KEY(key), 1)?;
-		self.send_sync()?;
-		
-		self.send_event(EventCode::EV_KEY(key), 0)?;
 		self.send_sync()?;
 		
 		return Ok(());

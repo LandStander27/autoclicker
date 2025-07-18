@@ -1,6 +1,6 @@
 use anyhow::Context;
-use evdev_rs::enums::{int_to_ev_key, BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
-use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
+use evdev_rs::enums::{EventCode, EV_SYN};
+use evdev_rs::{InputEvent, TimeVal, UInputDevice};
 
 pub trait VirtualDevice {
 	fn get_input(&self) -> &UInputDevice;

@@ -1,6 +1,6 @@
 use anyhow::Context;
-use evdev_rs::enums::{int_to_ev_key, BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
-use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
+use evdev_rs::enums::{int_to_ev_key, BusType, EventCode, EV_KEY};
+use evdev_rs::{DeviceWrapper, UInputDevice, UninitDevice};
 
 use crate::vdevice::*;
 
