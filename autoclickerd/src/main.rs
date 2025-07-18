@@ -57,18 +57,6 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 				return Err(anyhow!("invalid click type"));
 			}
 		}
-
-		Message::RepeatingKeyboardClick(ref _event) => {
-			// if !["left", "right", "middle"].contains(&event.button.as_str()) {
-			// 	warn!("invalid mouse button");
-			// 	return Err(anyhow!("invalid mouse button"));
-			// }
-
-			// if !["single", "double"].contains(&event.typ.as_str()) {
-			// 	warn!("invalid click type");
-			// 	return Err(anyhow!("invalid click type"));
-			// }
-		}
 		
 		Message::StopClicking(_) => {}
 		_ => {
@@ -132,7 +120,6 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 						};
 						parsed_keys.push(ev_key);
 					}
-					trace!("{:?}", parsed_keys);
 					current_key = 0;
 				}
 			}

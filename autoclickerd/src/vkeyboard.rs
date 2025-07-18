@@ -45,13 +45,6 @@ impl Keyboard {
 
 		return Ok(());
 	}
-	
-	pub fn click_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
-		self.press_keyboard_button(key)?;
-		self.release_keyboard_button(key)?;
-		
-		return Ok(());
-	}
 }
 
 impl VirtualDevice for Keyboard {
