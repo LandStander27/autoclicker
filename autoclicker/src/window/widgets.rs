@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use gtk4::{
 	self as gtk, EventControllerFocus, Expression, StringList
 };
@@ -19,6 +20,7 @@ use super::{
 	dialogs,
 	events,
 };
+use crate::keycodes;
 
 macro_rules! unfocus_on_enter {
 	($window:ident, $entry:ident) => {{
@@ -182,9 +184,9 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					let mut config = config_clone.lock().unwrap();
 					let num = x_entry.text();
 					if !num.is_empty() {
-						config.position.0 = Some(num.parse().unwrap());
+						config.mouse.position.0 = Some(num.parse().unwrap());
 					} else {
-						config.position.0 = None;
+						config.mouse.position.0 = None;
 					}
 					tracing::debug!(?config);
 				}
@@ -205,9 +207,9 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					let mut config = config_clone.lock().unwrap();
 					let num = y_entry.text();
 					if !num.is_empty() {
-						config.position.1 = Some(num.parse().unwrap());
+						config.mouse.position.1 = Some(num.parse().unwrap());
 					} else {
-						config.position.1 = None;
+						config.mouse.position.1 = None;
 					}
 					tracing::debug!(?config);
 				}
@@ -250,7 +252,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 								let mut config = config_clone.lock().unwrap();
 								x_entry.set_text(response.0.to_string().as_str());
 								y_entry.set_text(response.1.to_string().as_str());
-								config.position = (Some(response.0), Some(response.1));
+								config.mouse.position = (Some(response.0), Some(response.1));
 								tracing::trace!(?response);
 							}
 							
@@ -280,7 +282,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
 			entry.set_text("25");
-			config.lock().unwrap().interval = 25;
+			config.lock().unwrap().mouse.interval = 25;
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -291,7 +293,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					let mut config = config_clone.lock().unwrap();
 					let num = entry.text();
 					if !num.is_empty() {
-						config.interval = num.parse().unwrap();
+						config.mouse.interval = num.parse().unwrap();
 					}
 					tracing::debug!(?config);
 				}
@@ -346,7 +348,7 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 			let config_clone = config.clone();
 			button_dropdown.connect_selected_notify(move |dropdown| {
 				let mut config = config_clone.lock().unwrap();
-				config.mouse_button = match dropdown.selected() {
+				config.mouse.mouse_button = match dropdown.selected() {
 					0 => MouseButton::Left,
 					1 => MouseButton::Right,
 					2 => MouseButton::Middle,
@@ -371,7 +373,7 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 			let config_clone = config.clone();
 			button_dropdown.connect_selected_notify(move |dropdown| {
 				let mut config = config_clone.lock().unwrap();
-				config.typ = match dropdown.selected() {
+				config.mouse.typ = match dropdown.selected() {
 					0 => ClickType::Single,
 					1 => ClickType::Double,
 					_ => {
@@ -441,7 +443,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 					let num = entry.text();
 					
 					let mut config = config_clone.lock().unwrap();
-					config.repeat = if !num.is_empty() {
+					config.mouse.repeat = if !num.is_empty() {
 						if radio2.is_active() {
 							Some(num.parse().unwrap())
 						} else {
@@ -462,11 +464,11 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				move |btn| {
 					let mut config = config_clone.lock().unwrap();
 					if !btn.is_active() {
-						config.repeat = None;
+						config.mouse.repeat = None;
 					} else {
 						let s = entry.text();
 						if !s.is_empty() {
-							config.repeat = Some(s.parse().unwrap());
+							config.mouse.repeat = Some(s.parse().unwrap());
 						}
 					}
 					tracing::debug!(?config);
@@ -480,4 +482,288 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 	}
 	
 	return container;
+}
+
+pub fn key_sequence(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+
+	let title = gtk::Label::builder()
+		.label("Press type")
+		.halign(gtk::Align::Start)
+		.build();
+	title.add_css_class("title-4");
+	container.append(&title);
+
+	{
+		let grid = gtk::Grid::builder()
+			.row_spacing(6)
+			.column_spacing(6)
+			.column_homogeneous(true)
+			.row_homogeneous(true)
+			.build();
+
+		{
+			let label = gtk::Label::builder()
+				.label("Key Sequence: ")
+				.halign(gtk::Align::Start)
+				.build();
+			grid.attach(&label, 0, 0, 1, 1);
+			
+			let entry = gtk::Entry::new();
+			let config_clone = config.clone();
+			let focus_controller = EventControllerFocus::new();
+			focus_controller.connect_leave(clone!(
+				#[weak]
+				entry,
+				#[weak]
+				window,
+				move |_| {
+					let mut config = config_clone.lock().unwrap();
+					let text = entry.text();
+					config.keyboard.sequence = match parse_sequence(text.to_string()) {
+						Ok(o) => o,
+						Err(e) => {
+							glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
+							return;
+						}
+					};
+					tracing::debug!(?config);
+				}
+			));
+			entry.add_controller(focus_controller);
+			unfocus_on_enter!(window, entry);
+			grid.attach(&entry, 1, 0, 1, 1);
+		}
+
+		{
+			let button = gtk::CheckButton::with_label("Enter on every repetition");
+			grid.attach(&button, 1, 1, 1, 1);
+			
+			let config_clone = config.clone();
+			button.connect_toggled(move |btn| {
+				let mut config = config_clone.lock().unwrap();
+				config.keyboard.enter_after = btn.is_active();
+			});
+		}
+		
+		container.append(&grid);
+	}
+
+	return container;
+}
+
+pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+
+	let title = gtk::Label::builder()
+		.label("Repitition")
+		.halign(gtk::Align::Start)
+		.build();
+	title.add_css_class("title-4");
+	container.append(&title);
+	
+	{
+		let grid = gtk::Grid::builder()
+			.row_spacing(6)
+			.column_spacing(6)
+			.column_homogeneous(true)
+			.row_homogeneous(true)
+			.build();
+		
+		{
+			let radio1 = gtk::CheckButton::with_label("Click until stopped");
+			let radio2 = gtk::CheckButton::with_label("Click number of times: ");
+			
+			radio2.set_group(Some(&radio1));
+			
+			grid.attach(&radio1, 0, 0, 1, 1);
+			grid.attach(&radio2, 0, 1, 1, 1);
+			
+			radio1.activate();
+			
+			let entry = gtk::Entry::new();
+			grid.attach(&entry, 1, 1, 1, 1);
+
+			entry.set_sensitive(false);
+			entry.set_placeholder_text(Some("Amount"));
+			unfocus_on_enter!(window, entry);
+			
+			let config_clone = config.clone();
+			let focus_controller = EventControllerFocus::new();
+			focus_controller.connect_leave(clone!(
+				#[weak]
+				entry,
+				#[weak]
+				radio2,
+				move |_| {
+					only_allow_numbers!(entry);
+					let num = entry.text();
+					
+					let mut config = config_clone.lock().unwrap();
+					config.keyboard.repeat = if !num.is_empty() {
+						if radio2.is_active() {
+							Some(num.parse().unwrap())
+						} else {
+							None
+						}
+					} else {
+						None
+					};
+					tracing::debug!(?config);
+				}
+			));
+			entry.add_controller(focus_controller);
+
+			let config_clone = config.clone();
+			radio2.connect_toggled(clone!(
+				#[weak]
+				entry,
+				move |btn| {
+					let mut config = config_clone.lock().unwrap();
+					if !btn.is_active() {
+						config.keyboard.repeat = None;
+					} else {
+						let s = entry.text();
+						if !s.is_empty() {
+							config.keyboard.repeat = Some(s.parse().unwrap());
+						}
+					}
+					tracing::debug!(?config);
+
+					entry.set_sensitive(btn.is_active());
+				}
+			));
+		}
+		
+		container.append(&grid);
+	}
+	
+	return container;
+}
+
+pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+	
+	let title = gtk::Label::builder()
+		.label("More Options")
+		.halign(gtk::Align::Start)
+		.build();
+	title.add_css_class("title-4");
+	container.append(&title);
+	
+	{
+		let grid = gtk::Grid::builder()
+			.row_spacing(6)
+			.column_spacing(6)
+			.column_homogeneous(true)
+			.row_homogeneous(true)
+			.build();
+
+		{
+			let int_label = gtk::Label::builder()
+				.label("Interval: ")
+				.halign(gtk::Align::Start)
+				.build();
+			grid.attach(&int_label, 0, 1, 1, 1);
+			
+			let hbox = gtk::Box::builder()
+				.orientation(gtk::Orientation::Horizontal)
+				.spacing(12)
+				.build();
+			
+			let entry = gtk::Entry::new();
+			entry.set_hexpand(true);
+			entry.set_placeholder_text(Some("Duration"));
+			entry.set_text("25");
+			config.lock().unwrap().keyboard.interval = 25;
+			let config_clone = config.clone();
+			let focus_controller = EventControllerFocus::new();
+			focus_controller.connect_leave(clone!(
+				#[weak]
+				entry,
+				move |_| {
+					only_allow_numbers!(entry);
+					let mut config = config_clone.lock().unwrap();
+					let num = entry.text();
+					if !num.is_empty() {
+						config.keyboard.interval = num.parse().unwrap();
+					}
+					tracing::debug!(?config);
+				}
+			));
+			entry.add_controller(focus_controller);
+			unfocus_on_enter!(window, entry);
+			hbox.append(&entry);
+			
+			let label = gtk::Label::new(Some("ms"));
+			label.set_hexpand(false);
+			label.set_halign(gtk::Align::End);
+			hbox.append(&label);
+			
+			grid.attach(&hbox, 1, 1, 1, 1);
+		}
+
+		container.append(&grid);
+	}
+	
+	return container;
+}
+
+fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
+	let mut parsed = Vec::new();
+
+	let input: Vec<char> = input.chars().collect();
+	let mut i = 0;
+	while i < input.len() {
+		while input[i].is_whitespace() {
+			i += 1;
+		}
+
+		if input[i] == '"' {
+			i += 1;
+			while input[i] != '"' {
+				if input[i] == ' ' {
+					parsed.push("KEY_SPACE".into());
+				} else if keycodes::key_exists(input[i].to_string().as_str()) {
+					let mut s = String::new();
+					s.push_str("KEY_");
+					s.push_str(input[i].to_uppercase().to_string().as_str());
+					parsed.push(s);
+				} else {
+					return Err(anyhow!("invalid char in quotes"));
+				}
+				i += 1;
+				if i == input.len() {
+					return Err(anyhow!("mismatched quotes"));
+				}
+			}
+			i += 1;
+			continue;
+		}
+		
+		let mut token = String::new();
+		while i < input.len() && !input[i].is_whitespace() {
+			token.push(input[i]);
+			i += 1;
+		}
+		if keycodes::key_exists(token.as_str()) {
+			let mut s = String::new();
+			s.push_str("KEY_");
+			s.push_str(token.to_uppercase().as_str());
+			parsed.push(s);
+		} else {
+			return Err(anyhow!("invalid key"));
+		}
+	}
+
+	return Ok(parsed);
 }

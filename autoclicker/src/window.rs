@@ -35,6 +35,30 @@ impl Default for MouseButton {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub(super) enum Screen {
+	Mouse,
+	Keyboard,
+}
+
+impl Default for Screen {
+	fn default() -> Self {
+		return Self::Mouse;
+	}
+}
+
+impl std::str::FromStr for Screen {
+	type Err = ();
+	
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		return Ok(match s {
+			"mouse" => Self::Mouse,
+			"keyboard" => Self::Keyboard,
+			_ => return Err(()),
+		});
+	}
+}
+
 #[derive(Debug)]
 pub(super) enum ClickType {
 	Single,
@@ -48,12 +72,27 @@ impl Default for ClickType {
 }
 
 #[derive(Default, Debug)]
-pub(super) struct Config {
+pub(super) struct MouseConfig {
 	pub mouse_button: MouseButton,
 	pub typ: ClickType,
 	pub repeat: Option<u128>,
 	pub position: (Option<i32>, Option<i32>),
 	pub interval: u64,
+}
+
+#[derive(Default, Debug)]
+pub(super) struct KeyboardConfig {
+	pub sequence: Vec<String>,
+	pub enter_after: bool,
+	pub repeat: Option<u128>,
+	pub interval: u64,
+}
+
+#[derive(Default, Debug)]
+pub(super) struct Config {
+	pub screen: Screen,
+	pub mouse: MouseConfig,
+	pub keyboard: KeyboardConfig,
 }
 
 pub struct Window {
@@ -93,7 +132,7 @@ impl Window {
 			.margin_end(24)
 			.halign(gtk::Align::Center)
 			.valign(gtk::Align::Start)
-			.spacing(12)
+			.spacing(24)
 			.build();
 
 		let config = Arc::new(Mutex::new(Config::default()));
@@ -122,10 +161,20 @@ impl Window {
 				.spacing(12)
 				.build();
 			
-			
+			container.append(&widgets::key_sequence(&window, config.clone()));
+			container.append(&widgets::click_repeat_keyboard(&window, config.clone()));
+			container.append(&widgets::click_interval_keyboard(&window, config.clone()));
 			
 			stack.add_titled(&container, Some("keyboard"), "Keyboard");
 		}
+		
+		let clone = config.clone();
+		stack.connect_notify_local(Some("visible-child-name"), move |stack, _| {
+			let mut config = clone.lock().unwrap();
+			let screen = stack.visible_child_name().unwrap();
+			config.screen = screen.parse().unwrap();
+			tracing::trace!("current page: {}", screen);
+		});
 		
 		container.append(&widgets::start_clicking(&window, config));
 		window.set_child(Some(&container));
