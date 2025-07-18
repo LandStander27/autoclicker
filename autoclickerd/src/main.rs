@@ -100,10 +100,14 @@ fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
 
 fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyboard: Keyboard) -> anyhow::Result<()> {
 	let mut last_message = Message::StopClicking(StopClicking {});
-	let mut parsed_keys: Vec<EV_KEY> = Vec::new();
-	let mut current_key: usize = 0;
 	let mut last_click = std::time::Instant::now();
 	let mut amount_clicked: u128 = 0;
+
+	let mut parsed_keys: Vec<EV_KEY> = Vec::new();
+	let mut current_key: usize = 0;
+	let mut last_repeat = std::time::Instant::now();
+	let mut is_holding: bool = false;
+	let mut clicked_key: EV_KEY = EV_KEY::KEY_MAX;
 
 	'outer: loop {
 		if exiting.load(Ordering::Relaxed) {
@@ -116,25 +120,20 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				last_click = std::time::Instant::now();
 				amount_clicked = 0;
 				last_message = msg;
-				match last_message {
-					// Message::StopClicking(_) => first_click = false,
-					Message::RepeatingKeyboardClick(ref event) => {
-						parsed_keys.clear();
-						for key in &event.button {
-							let ev_key: EV_KEY = match key.parse() {
-								Ok(o) => o,
-								Err(_) => {
-									warn!("invalid keycode");
-									continue 'outer;
-								},
-							};
-							parsed_keys.push(ev_key);
-						}
-						trace!("{:?}", parsed_keys);
-						current_key = 0;
+				if let Message::RepeatingKeyboardClick(ref event) = last_message {
+					parsed_keys.clear();
+					for key in &event.button {
+						let ev_key: EV_KEY = match key.parse() {
+							Ok(o) => o,
+							Err(_) => {
+								warn!("invalid keycode");
+								continue 'outer;
+							},
+						};
+						parsed_keys.push(ev_key);
 					}
-					_ => {}
-					// _ => first_click = true,
+					trace!("{:?}", parsed_keys);
+					current_key = 0;
 				}
 			}
 
@@ -168,16 +167,29 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				if click.amount != 0 && amount_clicked >= click.amount as u128 {
 					continue;
 				}
+				
+				if current_key == 0 && last_repeat.elapsed().as_millis() < click.delay_before_repeat as u128 {
+					continue;
+				}
+
+				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
+					keyboard.release_keyboard_button(clicked_key)?;
+					is_holding = false;
+				} else if is_holding {
+					continue;
+				}
 
 				if last_click.elapsed().as_millis() >= click.interval as u128 {
 					last_click = std::time::Instant::now();
-					
-					trace!("{}, {}", parsed_keys[current_key], current_key);
-					keyboard.click_keyboard_button(parsed_keys[current_key])?;
+
+					keyboard.press_keyboard_button(parsed_keys[current_key])?;
+					is_holding = true;
+					clicked_key = parsed_keys[current_key];
 					current_key += 1;
 					if current_key == parsed_keys.len() {
 						amount_clicked += 1;
 						current_key = 0;
+						last_repeat = std::time::Instant::now();
 					}
 				}
 			}

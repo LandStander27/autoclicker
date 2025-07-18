@@ -99,10 +99,24 @@ pub async fn group_dialog(window: ApplicationWindow) {
 			#[weak]
 			window,
 			async move {
-				if let Ok(Err(e)) = receiver.recv().await {
-					error_dialog(window.clone(), "Command failed", e.to_string()).await;
+				match receiver.recv().await {
+					Ok(Err(e)) => error_dialog(window.clone(), "Command failed", e.to_string()).await,
+					Ok(Ok(_)) => reboot_dialog(&window).await,
+					_ => {}
+					// Err(_) => panic!("could not recv msg from channel"),
 				}
 			}
 		));
 	}
+}
+
+async fn reboot_dialog(window: &ApplicationWindow) {
+	tracing::debug!("opening reboot dialog");
+	let info_dialog = gtk::AlertDialog::builder()
+		.modal(true)
+		.message("Reboot")
+		.detail("To apply the changes, you must reboot")
+		.build();
+
+	info_dialog.show(Some(window));
 }

@@ -654,7 +654,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 		.build();
 	
 	let title = gtk::Label::builder()
-		.label("More Options")
+		.label("Timing")
 		.halign(gtk::Align::Start)
 		.build();
 	title.add_css_class("title-4");
@@ -667,13 +667,101 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			.column_homogeneous(true)
 			.row_homogeneous(true)
 			.build();
-
+		
+		{
+			let delay_label = gtk::Label::builder()
+				.label("Delay before repeat: ")
+				.halign(gtk::Align::Start)
+				.build();
+			grid.attach(&delay_label, 0, 1, 1, 1);
+			
+			let hbox = gtk::Box::builder()
+				.orientation(gtk::Orientation::Horizontal)
+				.spacing(12)
+				.build();
+			
+			let entry = gtk::Entry::new();
+			entry.set_hexpand(true);
+			entry.set_placeholder_text(Some("Duration"));
+			entry.set_text("0");
+			config.lock().unwrap().keyboard.interval = 0;
+			let config_clone = config.clone();
+			let focus_controller = EventControllerFocus::new();
+			focus_controller.connect_leave(clone!(
+				#[weak]
+				entry,
+				move |_| {
+					only_allow_numbers!(entry);
+					let mut config = config_clone.lock().unwrap();
+					let num = entry.text();
+					if !num.is_empty() {
+						config.keyboard.delay_before_repeat = num.parse().unwrap();
+					}
+					tracing::debug!(?config);
+				}
+			));
+			entry.add_controller(focus_controller);
+			unfocus_on_enter!(window, entry);
+			hbox.append(&entry);
+			
+			let label = gtk::Label::new(Some("ms"));
+			label.set_hexpand(false);
+			label.set_halign(gtk::Align::End);
+			hbox.append(&label);
+			
+			grid.attach(&hbox, 1, 1, 1, 1);
+		}
+		
+		{
+			let hold_label = gtk::Label::builder()
+				.label("Hold duration: ")
+				.halign(gtk::Align::Start)
+				.build();
+			grid.attach(&hold_label, 0, 2, 1, 1);
+			
+			let hbox = gtk::Box::builder()
+				.orientation(gtk::Orientation::Horizontal)
+				.spacing(12)
+				.build();
+			
+			let entry = gtk::Entry::new();
+			entry.set_hexpand(true);
+			entry.set_placeholder_text(Some("Duration"));
+			entry.set_text("0");
+			config.lock().unwrap().keyboard.hold_duration = 0;
+			let config_clone = config.clone();
+			let focus_controller = EventControllerFocus::new();
+			focus_controller.connect_leave(clone!(
+				#[weak]
+				entry,
+				move |_| {
+					only_allow_numbers!(entry);
+					let mut config = config_clone.lock().unwrap();
+					let num = entry.text();
+					if !num.is_empty() {
+						config.keyboard.hold_duration = num.parse().unwrap();
+					}
+					tracing::debug!(?config);
+				}
+			));
+			entry.add_controller(focus_controller);
+			unfocus_on_enter!(window, entry);
+			hbox.append(&entry);
+			
+			let label = gtk::Label::new(Some("ms"));
+			label.set_hexpand(false);
+			label.set_halign(gtk::Align::End);
+			hbox.append(&label);
+			
+			grid.attach(&hbox, 1, 2, 1, 1);
+		}
+		
 		{
 			let int_label = gtk::Label::builder()
 				.label("Interval: ")
 				.halign(gtk::Align::Start)
 				.build();
-			grid.attach(&int_label, 0, 1, 1, 1);
+			grid.attach(&int_label, 0, 3, 1, 1);
 			
 			let hbox = gtk::Box::builder()
 				.orientation(gtk::Orientation::Horizontal)
@@ -709,9 +797,9 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			label.set_halign(gtk::Align::End);
 			hbox.append(&label);
 			
-			grid.attach(&hbox, 1, 1, 1, 1);
+			grid.attach(&hbox, 1, 3, 1, 1);
 		}
-
+		
 		container.append(&grid);
 	}
 	

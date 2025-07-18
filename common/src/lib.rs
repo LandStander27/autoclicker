@@ -30,7 +30,8 @@ pub struct RepeatingKeyboardClick {
 	pub button: Vec<String>,
 	pub amount: u64,
 	pub interval: u64,
-	// pub delay_until_first_click: u64,
+	pub delay_before_repeat: u64,
+	pub hold_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

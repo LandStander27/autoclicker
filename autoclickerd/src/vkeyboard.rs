@@ -32,12 +32,23 @@ impl Keyboard {
 		});
 	}
 
-	pub fn click_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
-		self.send_event(EventCode::EV_KEY(key), 1)?;
-		self.send_sync()?;
-		
+	pub fn release_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
 		self.send_event(EventCode::EV_KEY(key), 0)?;
 		self.send_sync()?;
+		
+		return Ok(());
+	}
+	
+	pub fn press_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
+		self.send_event(EventCode::EV_KEY(key), 1)?;
+		self.send_sync()?;
+
+		return Ok(());
+	}
+	
+	pub fn click_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
+		self.press_keyboard_button(key)?;
+		self.release_keyboard_button(key)?;
 		
 		return Ok(());
 	}

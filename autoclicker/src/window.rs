@@ -86,6 +86,8 @@ pub(super) struct KeyboardConfig {
 	pub enter_after: bool,
 	pub repeat: Option<u128>,
 	pub interval: u64,
+	pub delay_before_repeat: u64,
+	pub hold_duration: u64,
 }
 
 #[derive(Default, Debug)]

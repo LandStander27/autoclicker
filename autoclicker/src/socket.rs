@@ -75,7 +75,9 @@ pub fn send_keyboard_request(config: &KeyboardConfig) -> anyhow::Result<()> {
 	let request = Message::RepeatingKeyboardClick(RepeatingKeyboardClick {
 		button: seq,
 		amount: config.repeat.unwrap_or(0) as u64,
-		interval: config.interval
+		interval: config.interval,
+		delay_before_repeat: config.delay_before_repeat,
+		hold_duration: config.hold_duration,
 	});
 	let json = Message::encode(&request).context("could not encode as json")?;
 	stream.write(json.as_bytes()).context("could not write to socket")?;
