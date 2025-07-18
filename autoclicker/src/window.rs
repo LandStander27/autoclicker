@@ -3,6 +3,9 @@ use gtk::prelude::*;
 use gtk::{
 	Application,
 	ApplicationWindow,
+	Stack,
+	StackSwitcher,
+	StackTransitionType
 };
 
 use std::sync::{Arc, Mutex};
@@ -92,15 +95,39 @@ impl Window {
 			.valign(gtk::Align::Start)
 			.spacing(12)
 			.build();
-		
-		// let controller = gtk::ShortcutController::new();
+
 		let config = Arc::new(Mutex::new(Config::default()));
-		widgets::click_type(&container, config.clone());
-		widgets::click_repeat(&container, &window, config.clone());
-		widgets::click_position(&container, &window, config.clone());
-		widgets::start_clicking(&container, &window, config);
 		
-		// window.add_controller(controller);
+		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
+		let switcher = StackSwitcher::builder().stack(&stack).build();
+		container.append(&switcher);
+		container.append(&stack);
+
+		{
+			let container = gtk::Box::builder()
+				.orientation(gtk::Orientation::Vertical)
+				.spacing(12)
+				.build();
+			
+			container.append(&widgets::click_type(config.clone()));
+			container.append(&widgets::click_repeat(&window, config.clone()));
+			container.append(&widgets::click_position(&window, config.clone()));
+			
+			stack.add_titled(&container, Some("mouse"), "Mouse");
+		}
+
+		{
+			let container = gtk::Box::builder()
+				.orientation(gtk::Orientation::Vertical)
+				.spacing(12)
+				.build();
+			
+			
+			
+			stack.add_titled(&container, Some("keyboard"), "Keyboard");
+		}
+		
+		container.append(&widgets::start_clicking(&window, config));
 		window.set_child(Some(&container));
 		window.present();
 	}

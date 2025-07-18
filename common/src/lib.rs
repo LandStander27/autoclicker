@@ -16,13 +16,21 @@ pub trait Json<T: for<'de> Deserialize<'de> + Serialize = Self> {
 pub struct StopClicking {}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RepeatingClick {
+pub struct RepeatingMouseClick {
 	pub button: String,
 	pub typ: String,
 	pub amount: u64,
 	pub position: (Option<i32>, Option<i32>),
 	pub interval: u64,
-	pub delay_until_first_click: u64,
+	// pub delay_until_first_click: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RepeatingKeyboardClick {
+	pub button: Vec<String>,
+	pub amount: u64,
+	pub interval: u64,
+	// pub delay_until_first_click: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -42,7 +50,8 @@ pub struct Error {
 #[serde(tag = "type")]
 pub enum Message {
 	MouseClick(MouseClick),
-	RepeatingClick(RepeatingClick),
+	RepeatingMouseClick(RepeatingMouseClick),
+	RepeatingKeyboardClick(RepeatingKeyboardClick),
 	StopClicking(StopClicking),
 	ConfirmResponse(ConfirmResponse),
 	Error(Error),

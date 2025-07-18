@@ -50,5 +50,5 @@ install -Dm644 "assets/dev.land.Autoclicker.desktop" -t "/usr/share/applications
 install -Dm644 "assets/autoclickerd.service" -t "/usr/lib/systemd/user/"
 
 # Optionally uninstall build depends
-pacman -Rsn git rust sed libgit2
+pacman -Rs git rust sed libgit2
 ```

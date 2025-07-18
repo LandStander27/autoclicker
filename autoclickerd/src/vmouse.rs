@@ -1,6 +1,8 @@
 use anyhow::Context;
-use evdev_rs::enums::{BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
+use evdev_rs::enums::{int_to_ev_key, BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
 use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
+
+use crate::vdevice::*;
 
 pub enum MouseButton {
 	Left,
@@ -16,11 +18,17 @@ pub struct Mouse {
 
 impl Mouse {
 	pub fn new() -> anyhow::Result<Self> {
-		let mouse = UninitDevice::new().context("could not create device")?;
+		let mouse = UninitDevice::new().context("could not create mouse")?;
 		mouse.set_name("autoclicker virtual mouse");
 		mouse.set_bustype(BusType::BUS_USB as u16);
 		mouse.set_vendor_id(0xabcd);
 		mouse.set_product_id(0xefef);
+		
+		// for key in EV_KEY::KEY_ESC as u32..EV_KEY::KEY_MAX as u32 {
+		// 	if let Some(key) = int_to_ev_key(key) {
+		// 		device.enable(EventCode::EV_KEY(key)).context("could not enable keyboard key")?;
+		// 	}
+		// }
 		
 		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_LEFT)).context("could not enable left mouse key")?;
 		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE)).context("could not enable middle mouse key")?;
@@ -59,7 +67,17 @@ impl Mouse {
 		return Ok(());
 	}
 
-	pub fn click_button(&self, button: MouseButton) -> anyhow::Result<()> {
+	pub fn click_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
+		self.send_event(EventCode::EV_KEY(key), 1)?;
+		self.send_sync()?;
+		
+		self.send_event(EventCode::EV_KEY(key), 0)?;
+		self.send_sync()?;
+		
+		return Ok(());
+	}
+	
+	pub fn click_mouse_button(&self, button: MouseButton) -> anyhow::Result<()> {
 		match button {
 			MouseButton::Left => {
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_LEFT), 1)?;
@@ -88,23 +106,10 @@ impl Mouse {
 
 		return Ok(());
 	}
+}
 
-	fn send_event(&self, ev: EventCode, value: i32) -> anyhow::Result<()> {
-		self.input.write_event(&InputEvent {
-			event_code: ev,
-			value,
-			time: self.get_time()?,
-		}).context("could not write event to input device")?;
-		
-		return Ok(());
-	}
-
-	fn get_time(&self) -> anyhow::Result<TimeVal> {
-		return TimeVal::try_from(std::time::SystemTime::now()).context("could not convert SystemTime to TimeVal");
-	}
-	
-	fn send_sync(&self) -> anyhow::Result<()> {
-		self.send_event(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 0)?;
-		return Ok(());
+impl VirtualDevice for Mouse {
+	fn get_input(&self) -> &UInputDevice {
+		return &self.input;
 	}
 }

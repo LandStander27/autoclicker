@@ -43,7 +43,12 @@ macro_rules! only_allow_numbers {
 	}};
 }
 
-pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
+pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+	
 	let grid = gtk::Grid::builder()
 		.row_spacing(6)
 		.column_spacing(6)
@@ -127,9 +132,15 @@ pub fn start_clicking(container: &gtk::Box, window: &ApplicationWindow, config: 
 	));
 
 	container.append(&grid);
+	return container;
 }
 
-pub fn click_position(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
+pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+	
 	let title = gtk::Label::builder()
 		.label("Click position")
 		.halign(gtk::Align::Start)
@@ -299,9 +310,16 @@ pub fn click_position(container: &gtk::Box, window: &ApplicationWindow, config: 
 
 		container.append(&grid);
 	}
+	
+	return container;
 }
 
-pub fn click_type(container: &gtk::Box, config: Arc<Mutex<Config>>) {
+pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+
 	let title = gtk::Label::builder()
 		.label("Click type")
 		.halign(gtk::Align::Start)
@@ -368,9 +386,16 @@ pub fn click_type(container: &gtk::Box, config: Arc<Mutex<Config>>) {
 		
 		container.append(&grid);
 	}
+	
+	return container;
 }
 
-pub fn click_repeat(container: &gtk::Box, window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
+pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
+	let container = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.spacing(12)
+		.build();
+
 	let title = gtk::Label::builder()
 		.label("Repitition")
 		.halign(gtk::Align::Start)
@@ -453,4 +478,6 @@ pub fn click_repeat(container: &gtk::Box, window: &ApplicationWindow, config: Ar
 		
 		container.append(&grid);
 	}
+	
+	return container;
 }

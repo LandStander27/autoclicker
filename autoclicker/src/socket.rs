@@ -40,7 +40,7 @@ pub fn send_stop() -> anyhow::Result<()> {
 pub fn send_request(config: Arc<Mutex<Config>>) -> anyhow::Result<()> {
 	let config = config.lock().unwrap();
 	let mut stream = UnixStream::connect(socket_file()).context("could not connect to socket")?;
-	let request = Message::RepeatingClick(RepeatingClick {
+	let request = Message::RepeatingMouseClick(RepeatingMouseClick {
 		button: match config.mouse_button {
 			MouseButton::Left => "left",
 			MouseButton::Right => "right",
@@ -53,7 +53,7 @@ pub fn send_request(config: Arc<Mutex<Config>>) -> anyhow::Result<()> {
 		amount: config.repeat.unwrap_or(0) as u64,
 		interval: config.interval,
 		position: config.position,
-		delay_until_first_click: 2000,
+		// delay_until_first_click: 2000,
 	});
 
 	let json = Message::encode(&request).context("could not encode as json")?;

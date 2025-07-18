@@ -1,7 +1,9 @@
 pub use crate::{
 	MouseClick,
-	RepeatingClick,
+	RepeatingMouseClick,
+	RepeatingKeyboardClick,
 	StopClicking,
+	ConfirmResponse,
 	Message,
 	Json,
 	Error as ErrorResponse
