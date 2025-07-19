@@ -83,6 +83,7 @@ pub(super) struct MouseConfig {
 #[derive(Default, Debug)]
 pub(super) struct KeyboardConfig {
 	pub sequence: Vec<String>,
+	pub raw_sequence: String,
 	pub enter_after: bool,
 	pub repeat: Option<u128>,
 	pub interval: u64,

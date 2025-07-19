@@ -57,10 +57,10 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 				return Err(anyhow!("invalid click type"));
 			}
 		}
-		
+		Message::RepeatingKeyboardClick(_) => {}
 		Message::StopClicking(_) => {}
 		_ => {
-			warn!("invalid request");
+			warn!("invalid request: {req:?}");
 			return Err(anyhow!("invalid request"));
 		}
 	}
@@ -71,7 +71,7 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 
 fn socket_file() -> String {
 	let id = nix::unistd::geteuid();
-	return format!("/run/user/{}/autoclicker.socket", id);
+	return format!("/run/user/{id}/autoclicker.socket");
 }
 
 fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
@@ -126,7 +126,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 
 			Err(e) => {
 				if e != mpsc::TryRecvError::Empty {
-					panic!("recv_error: {}", e);
+					panic!("recv_error: {e}");
 				}
 			}
 		}
@@ -161,6 +161,12 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 
 				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
 					keyboard.release_keyboard_button(clicked_key)?;
+					amount_clicked += 1;
+					last_repeat = std::time::Instant::now();
+					current_key += 1;
+					if current_key == parsed_keys.len() {
+						current_key = 0;
+					}
 					is_holding = false;
 				} else if is_holding {
 					continue;
@@ -172,12 +178,6 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 					keyboard.press_keyboard_button(parsed_keys[current_key])?;
 					is_holding = true;
 					clicked_key = parsed_keys[current_key];
-					current_key += 1;
-					if current_key == parsed_keys.len() {
-						amount_clicked += 1;
-						current_key = 0;
-						last_repeat = std::time::Instant::now();
-					}
 				}
 			}
 			_ => todo!()
