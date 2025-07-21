@@ -11,6 +11,7 @@ use gtk::{
 use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
+use serde::{Serialize, Deserialize};
 
 mod widgets;
 // mod shortcut;
@@ -22,7 +23,7 @@ fn runtime() -> &'static Runtime {
 	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) enum MouseButton {
 	Left,
 	Right,
@@ -35,7 +36,7 @@ impl Default for MouseButton {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) enum Screen {
 	Mouse,
 	Keyboard,
@@ -59,7 +60,7 @@ impl std::str::FromStr for Screen {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) enum ClickType {
 	Single,
 	Double,
@@ -71,27 +72,55 @@ impl Default for ClickType {
 	}
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MouseConfig {
 	pub mouse_button: MouseButton,
 	pub typ: ClickType,
-	pub repeat: Option<u128>,
-	pub position: (Option<i32>, Option<i32>),
+	pub repeat: u64,
+	pub position: (i32, i32),
+	pub enabled_axis: (bool, bool),
 	pub interval: u64,
 }
 
-#[derive(Default, Debug)]
+impl Default for MouseConfig {
+	fn default() -> Self {
+		return Self {
+			mouse_button: MouseButton::default(),
+			typ: ClickType::default(),
+			repeat: 0,
+			position: (0, 0),
+			enabled_axis: (false, false),
+			interval: 25,
+		};
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct KeyboardConfig {
 	pub sequence: Vec<String>,
 	pub raw_sequence: String,
 	pub enter_after: bool,
-	pub repeat: Option<u128>,
+	pub repeat: u64,
 	pub interval: u64,
 	pub delay_before_repeat: u64,
 	pub hold_duration: u64,
 }
 
-#[derive(Default, Debug)]
+impl Default for KeyboardConfig {
+	fn default() -> Self {
+		return Self {
+			sequence: Vec::new(),
+			raw_sequence: "".to_string(),
+			enter_after: false,
+			repeat: 0,
+			interval: 25,
+			delay_before_repeat: 0,
+			hold_duration: 0,
+		};
+	}
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub(super) struct Config {
 	pub screen: Screen,
 	pub mouse: MouseConfig,
@@ -138,7 +167,7 @@ impl Window {
 			.spacing(24)
 			.build();
 
-		let config = Arc::new(Mutex::new(Config::default()));
+		let config = Arc::new(Mutex::new(confy::load("dev.land.Autoclicker", None).unwrap()));
 		
 		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
 		let switcher = StackSwitcher::builder().stack(&stack).build();

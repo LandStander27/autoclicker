@@ -9,6 +9,7 @@ use gtk::{
 };
 use libadwaita::prelude::*;
 
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use super::{
@@ -71,8 +72,9 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 		}
 	));
 
+	let clone = config.clone();
 	window.connect_map(move |window| {
-		let clone = config.clone();
+		let clone = clone.clone();
 		gtk::glib::MainContext::default().spawn_local(glib::clone!(
 			#[weak]
 			window,
@@ -86,13 +88,16 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			}
 		));
 	});
-	
-	window.connect_close_request(|_| {
+
+	let clone = config.clone();
+	window.connect_close_request(move |_| {
 		runtime().block_on(async {
 			if let Err(e) = crate::shortcuts::stop_session().await {
 				tracing::error!("could not close session: {e}");
 			}
 		});
+		let config: std::sync::MutexGuard<'_, Config> = clone.lock().unwrap();
+		confy::store("dev.land.Autoclicker", None, config.deref()).unwrap();
 
 		return glib::Propagation::Proceed;
 	});
@@ -168,9 +173,10 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					let mut config = config_clone.lock().unwrap();
 					let num = x_entry.text();
 					if !num.is_empty() {
-						config.mouse.position.0 = Some(num.parse().unwrap());
+						config.mouse.position.0 = num.parse().unwrap();
+						config.mouse.enabled_axis.0 = true;
 					} else {
-						config.mouse.position.0 = None;
+						config.mouse.enabled_axis.0 = false;
 					}
 					tracing::debug!(?config);
 				}
@@ -181,6 +187,15 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			
 			let y_entry = gtk::Entry::new();
 			y_entry.set_placeholder_text(Some("Y pos"));
+			{
+				let lock = config.lock().unwrap();
+				if lock.mouse.enabled_axis.0 {
+					x_entry.set_text(lock.mouse.position.0.to_string().as_str());
+				}
+				if lock.mouse.enabled_axis.1 {
+					y_entry.set_text(lock.mouse.position.1.to_string().as_str());
+				}
+			}
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -191,9 +206,10 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					let mut config = config_clone.lock().unwrap();
 					let num = y_entry.text();
 					if !num.is_empty() {
-						config.mouse.position.1 = Some(num.parse().unwrap());
+						config.mouse.position.1 = num.parse().unwrap();
+						config.mouse.enabled_axis.1 = true;
 					} else {
-						config.mouse.position.1 = None;
+						config.mouse.enabled_axis.1 = false;
 					}
 					tracing::debug!(?config);
 				}
@@ -236,7 +252,9 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 								let mut config = config_clone.lock().unwrap();
 								x_entry.set_text(response.0.to_string().as_str());
 								y_entry.set_text(response.1.to_string().as_str());
-								config.mouse.position = (Some(response.0), Some(response.1));
+								config.mouse.position = (response.0, response.1);
+								config.mouse.enabled_axis.0 = true;
+								config.mouse.enabled_axis.1 = true;
 								tracing::trace!(?response);
 							}
 							
@@ -265,8 +283,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text("25");
-			config.lock().unwrap().mouse.interval = 25;
+			entry.set_text(config.lock().unwrap().mouse.interval.to_string().as_str());
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -336,6 +353,12 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 			grid.attach(&button_label, 0, 0, 1, 1);
 			
 			let button_dropdown = gtk::DropDown::new(Some(StringList::new(&["Left", "Right", "Middle"])), Expression::NONE);
+			button_dropdown.set_selected(match config.lock().unwrap().mouse.mouse_button {
+				MouseButton::Left => 0,
+				MouseButton::Right => 1,
+				MouseButton::Middle => 2
+			});
+
 			let config_clone = config.clone();
 			button_dropdown.connect_selected_notify(move |dropdown| {
 				let mut config = config_clone.lock().unwrap();
@@ -361,6 +384,11 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 			grid.attach(&button_label, 0, 1, 1, 1);
 			
 			let button_dropdown = gtk::DropDown::new(Some(StringList::new(&["Single", "Double"])), Expression::NONE);
+			button_dropdown.set_selected(match config.lock().unwrap().mouse.typ {
+				ClickType::Single => 0,
+				ClickType::Double => 1
+			});
+
 			let config_clone = config.clone();
 			button_dropdown.connect_selected_notify(move |dropdown| {
 				let mut config = config_clone.lock().unwrap();
@@ -420,6 +448,12 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 
 			entry.set_sensitive(false);
 			entry.set_placeholder_text(Some("Amount"));
+			{
+				let lock = config.lock().unwrap();
+				if lock.mouse.repeat != 0 {
+					entry.set_text(lock.mouse.repeat.to_string().as_str());
+				}
+			}
 			unfocus_on_enter!(window, entry);
 			
 			let config_clone = config.clone();
@@ -436,12 +470,12 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 					let mut config = config_clone.lock().unwrap();
 					config.mouse.repeat = if !num.is_empty() {
 						if radio2.is_active() {
-							Some(num.parse().unwrap())
+							num.parse().unwrap()
 						} else {
-							None
+							0
 						}
 					} else {
-						None
+						0
 					};
 					tracing::debug!(?config);
 				}
@@ -455,11 +489,11 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				move |btn| {
 					let mut config = config_clone.lock().unwrap();
 					if !btn.is_active() {
-						config.mouse.repeat = None;
+						config.mouse.repeat = 0;
 					} else {
 						let s = entry.text();
 						if !s.is_empty() {
-							config.mouse.repeat = Some(s.parse().unwrap());
+							config.mouse.repeat = s.parse().unwrap();
 						}
 					}
 					tracing::debug!(?config);
@@ -502,7 +536,7 @@ pub fn key_sequence(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&label, 0, 0, 1, 1);
-			
+
 			let button = gtk::Button::with_label("Edit");
 			let config_clone = config.clone();
 			button.connect_clicked(clone!(
@@ -517,15 +551,16 @@ pub fn key_sequence(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 
 		{
 			let button = gtk::CheckButton::with_label("Enter on every repetition");
+			button.set_active(config.lock().unwrap().keyboard.enter_after);
 			grid.attach(&button, 1, 1, 1, 1);
-			
+
 			let config_clone = config.clone();
 			button.connect_toggled(move |btn| {
 				let mut config = config_clone.lock().unwrap();
 				config.keyboard.enter_after = btn.is_active();
 			});
 		}
-		
+
 		container.append(&grid);
 	}
 
@@ -569,6 +604,12 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 
 			entry.set_sensitive(false);
 			entry.set_placeholder_text(Some("Amount"));
+			{
+				let lock = config.lock().unwrap();
+				if lock.keyboard.repeat != 0 {
+					entry.set_text(lock.keyboard.repeat.to_string().as_str());
+				}
+			}
 			unfocus_on_enter!(window, entry);
 			
 			let config_clone = config.clone();
@@ -585,12 +626,12 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 					let mut config = config_clone.lock().unwrap();
 					config.keyboard.repeat = if !num.is_empty() {
 						if radio2.is_active() {
-							Some(num.parse().unwrap())
+							num.parse().unwrap()
 						} else {
-							None
+							0
 						}
 					} else {
-						None
+						0
 					};
 					tracing::debug!(?config);
 				}
@@ -604,11 +645,11 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 				move |btn| {
 					let mut config = config_clone.lock().unwrap();
 					if !btn.is_active() {
-						config.keyboard.repeat = None;
+						config.keyboard.repeat = 0;
 					} else {
 						let s = entry.text();
 						if !s.is_empty() {
-							config.keyboard.repeat = Some(s.parse().unwrap());
+							config.keyboard.repeat = s.parse().unwrap();
 						}
 					}
 					tracing::debug!(?config);
@@ -660,8 +701,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text("0");
-			config.lock().unwrap().keyboard.interval = 0;
+			entry.set_text(config.lock().unwrap().keyboard.delay_before_repeat.to_string().as_str());
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -704,8 +744,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text("0");
-			config.lock().unwrap().keyboard.hold_duration = 0;
+			entry.set_text(config.lock().unwrap().keyboard.hold_duration.to_string().as_str());
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -748,8 +787,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text("25");
-			config.lock().unwrap().keyboard.interval = 25;
+			entry.set_text(config.lock().unwrap().keyboard.interval.to_string().as_str());
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(

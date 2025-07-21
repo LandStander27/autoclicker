@@ -45,9 +45,9 @@ pub fn send_mouse_request(config: &MouseConfig) -> anyhow::Result<()> {
 			ClickType::Single => "single",
 			ClickType::Double => "double",
 		}.to_string(),
-		amount: config.repeat.unwrap_or(0) as u64,
+		amount: config.repeat,
 		interval: config.interval,
-		position: config.position,
+		position: (if config.enabled_axis.0 { Some(config.position.0) } else { None }, if config.enabled_axis.1 { Some(config.position.1) } else { None }),
 		// delay_until_first_click: 2000,
 	});
 
@@ -74,7 +74,7 @@ pub fn send_keyboard_request(config: &KeyboardConfig) -> anyhow::Result<()> {
 	}
 	let request = Message::RepeatingKeyboardClick(RepeatingKeyboardClick {
 		button: seq,
-		amount: config.repeat.unwrap_or(0) as u64,
+		amount: config.repeat,
 		interval: config.interval,
 		delay_before_repeat: config.delay_before_repeat,
 		hold_duration: config.hold_duration,
