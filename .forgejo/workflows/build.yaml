@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - "**"
+      - "!README.md"
+      - "!.gitignore"
+      - "!LICENSE"
+      - "!assets/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: docker
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install deps
+        run: pacman --noconfirm --needed -Sy git nodejs cairo gtk4 libadwaita polkit glib2 glibc libevdev rust sed libgit2
+
+      - uses: actions/checkout@v4
+      - name: Build autoclicker client
+        run: 	cargo b --release --package autoclicker
+
+      - name: Build autoclicker daemon
+        run: 	cargo b --release --package autoclickerd
+
+      - name: Upload autoclicker client
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: autoclicker
+          path: target/release/autoclicker
+
+      - name: Upload autoclicker daemon
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: autoclickerd
+          path: target/release/autoclickerd
