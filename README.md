@@ -85,7 +85,7 @@ autoclicker
 3. Define a global shortcut through your system's shortcut manager (using the XDG portal)
 4. Enjoy!
 
-## 🧪 Notes
+## 🗒️ Notes
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
 ```sh
