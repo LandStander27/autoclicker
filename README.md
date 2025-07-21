@@ -6,13 +6,13 @@
 Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool).
 
 <details>
-	<summary><b>Click me for screenshots!</b></summary>
+  <summary><b>Click me for screenshots!</b></summary>
 
-	![Mouse](assets/screenshots/mouse.png?raw=true "Mouse")
-	
-	![Keyboard](assets/screenshots/keyboard.png?raw=true "Keyboard")
-	
-	![Keyboard editor](assets/screenshots/key_editor.png?raw=true "Keyboard editor")
+  ![Mouse](assets/screenshots/mouse.png?raw=true "Mouse")
+
+  ![Keyboard](assets/screenshots/keyboard.png?raw=true "Keyboard")
+
+  ![Keyboard editor](assets/screenshots/key_editor.png?raw=true "Keyboard editor")
 </details>
 
 ## ✨ Features
