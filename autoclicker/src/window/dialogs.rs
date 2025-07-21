@@ -2,10 +2,12 @@ use anyhow::Context;
 use gtk4 as gtk;
 use gtk::{
 	ApplicationWindow,
+	prelude::*,
 	glib::{self, clone},
 };
+use std::sync::{Arc, Mutex};
 
-use super::runtime;
+use super::{runtime, events, Config};
 use crate::unix;
 
 pub async fn error_dialog(window: gtk::ApplicationWindow, title: &str, msg: String) {
@@ -108,6 +110,117 @@ pub async fn group_dialog(window: ApplicationWindow) {
 			}
 		));
 	}
+}
+
+pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
+	let dialog = gtk::Window::builder()
+		.transient_for(window)
+		.modal(true)
+		.title("Key sequence")
+		.default_width(500)
+		.default_height(500)
+		.build();
+	
+	let vbox = gtk::Box::builder()
+		.orientation(gtk::Orientation::Vertical)
+		.margin_top(24)
+		.margin_bottom(24)
+		.margin_start(24)
+		.margin_end(24)
+		.halign(gtk::Align::Fill)
+		.valign(gtk::Align::Fill)
+		.spacing(12)
+		.hexpand(true)
+		.vexpand(true)
+		.build();
+	
+	let scrollable = gtk::ScrolledWindow::builder()
+		.vexpand(true)
+		.hexpand(true)
+		.build();
+	
+	let debounce_id: Arc<Mutex<Option<glib::SourceId>>> = Arc::new(Mutex::new(None));
+	let tag_table = gtk::TextTagTable::new();
+	let str_tag = gtk::TextTag::builder().name("string").foreground("green").build();
+	let key_tag = gtk::TextTag::builder().name("keycode").foreground("cyan").build();
+	let error_tag = gtk::TextTag::builder().name("invalid_keycode").foreground("red").build();
+	tag_table.add(&str_tag);
+	tag_table.add(&key_tag);
+	tag_table.add(&error_tag);
+
+	let buffer = gtk::TextBuffer::new(Some(&tag_table));
+	let clone = buffer.clone();
+	buffer.connect_changed(clone!(
+		#[strong]
+		debounce_id,
+		#[weak]
+		clone,
+		move |_| {
+			events::syntax_highlighting(&debounce_id, clone);
+		}
+	));
+
+	let entry = gtk::TextView::builder().buffer(&buffer).monospace(true).build();
+	{
+		let config = config.lock().unwrap();
+		entry.buffer().set_text(&config.keyboard.raw_sequence);
+	}
+	dialog.set_child(Some(&vbox));
+	scrollable.set_child(Some(&entry));
+	vbox.append(&scrollable);
+	
+	let button_grid = gtk::Grid::builder()
+		.row_spacing(6)
+		.column_spacing(6)
+		.column_homogeneous(true)
+		.row_homogeneous(true)
+		.build();
+	
+	let cancel_button = gtk::Button::with_label("Cancel");
+	cancel_button.connect_clicked(clone!(
+		#[weak]
+		dialog,
+		move |_| {
+			dialog.close();
+		}
+	));
+	
+	let ok_button = gtk::Button::with_label("Ok");
+	ok_button.add_css_class("suggested-action");
+	ok_button.connect_clicked(clone!(
+		#[weak]
+		config,
+		#[weak]
+		entry,
+		#[weak]
+		window,
+		#[weak]
+		dialog,
+		move |_| {
+			let mut config = config.lock().unwrap();
+			let buffer = entry.buffer();
+			let (start, end) = buffer.bounds();
+			let text = buffer.text(&start, &end, true).to_string();
+
+			config.keyboard.raw_sequence = text.clone();
+			config.keyboard.sequence = match events::parse_sequence(text) {
+				Ok(o) => o,
+				Err(e) => {
+					glib::MainContext::default().spawn_local(error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
+					return;
+				}
+			};
+			tracing::debug!(?config);
+			dialog.close();
+		}
+	));
+	
+	button_grid.attach(&cancel_button, 0, 0, 1, 1);
+	button_grid.attach(&ok_button, 1, 0, 1, 1);
+	
+	vbox.append(&button_grid);
+	
+	dialog.present();
 }
 
 async fn reboot_dialog(window: &ApplicationWindow) {

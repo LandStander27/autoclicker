@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use gtk4 as gtk;
 use gtk::prelude::*;
 use gtk::{
@@ -21,7 +20,6 @@ use super::{
 	dialogs,
 	events,
 };
-use crate::keycodes;
 
 macro_rules! unfocus_on_enter {
 	($window:ident, $entry:ident) => {{
@@ -526,35 +524,10 @@ pub fn key_sequence(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				#[weak]
 				window,
 				move |_| {
-					sequence_dialog(&window, config_clone.clone());
+					dialogs::sequence_dialog(&window, config_clone.clone());
 				}
 			));
 			grid.attach(&button, 1, 0, 1, 1);
-			
-			// let entry = gtk::Entry::new();
-			// let config_clone = config.clone();
-			// let focus_controller = EventControllerFocus::new();
-			// focus_controller.connect_leave(clone!(
-			// 	#[weak]
-			// 	entry,
-			// 	#[weak]
-			// 	window,
-			// 	move |_| {
-			// 		let mut config = config_clone.lock().unwrap();
-			// 		let text = entry.text();
-			// 		config.keyboard.sequence = match parse_sequence(text.to_string()) {
-			// 			Ok(o) => o,
-			// 			Err(e) => {
-			// 				glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
-			// 				return;
-			// 			}
-			// 		};
-			// 		tracing::debug!(?config);
-			// 	}
-			// ));
-			// entry.add_controller(focus_controller);
-			// unfocus_on_enter!(window, entry);
-			// grid.attach(&entry, 1, 0, 1, 1);
 		}
 
 		{
@@ -572,96 +545,6 @@ pub fn key_sequence(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 	}
 
 	return container;
-}
-
-fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
-	let dialog = gtk::Window::builder()
-		.transient_for(window)
-		.modal(true)
-		.title("Key sequence")
-		.default_width(500)
-		.default_height(500)
-		.build();
-	
-	let vbox = gtk::Box::builder()
-		.orientation(gtk::Orientation::Vertical)
-		.margin_top(24)
-		.margin_bottom(24)
-		.margin_start(24)
-		.margin_end(24)
-		.halign(gtk::Align::Fill)
-		.valign(gtk::Align::Fill)
-		.spacing(12)
-		.hexpand(true)
-		.vexpand(true)
-		.build();
-	
-	let scrollable = gtk::ScrolledWindow::builder()
-		.vexpand(true)
-		.hexpand(true)
-		.build();
-	
-	let entry = gtk::TextView::new();
-	{
-		let config = config.lock().unwrap();
-		entry.buffer().set_text(&config.keyboard.raw_sequence);
-	}
-	dialog.set_child(Some(&vbox));
-	scrollable.set_child(Some(&entry));
-	vbox.append(&scrollable);
-	
-	let button_grid = gtk::Grid::builder()
-		.row_spacing(6)
-		.column_spacing(6)
-		.column_homogeneous(true)
-		.row_homogeneous(true)
-		.build();
-	
-	let cancel_button = gtk::Button::with_label("Cancel");
-	cancel_button.connect_clicked(clone!(
-		#[weak]
-		dialog,
-		move |_| {
-			dialog.close();
-		}
-	));
-	
-	let ok_button = gtk::Button::with_label("Ok");
-	ok_button.add_css_class("suggested-action");
-	ok_button.connect_clicked(clone!(
-		#[weak]
-		config,
-		#[weak]
-		entry,
-		#[weak]
-		window,
-		#[weak]
-		dialog,
-		move |_| {
-			let mut config = config.lock().unwrap();
-			let buffer = entry.buffer();
-			let (start, end) = buffer.bounds();
-			let text = buffer.text(&start, &end, true).to_string();
-
-			config.keyboard.raw_sequence = text.clone();
-			config.keyboard.sequence = match parse_sequence(text) {
-				Ok(o) => o,
-				Err(e) => {
-					glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
-					return;
-				}
-			};
-			tracing::debug!(?config);
-			dialog.close();
-		}
-	));
-	
-	button_grid.attach(&cancel_button, 0, 0, 1, 1);
-	button_grid.attach(&ok_button, 1, 0, 1, 1);
-	
-	vbox.append(&button_grid);
-	
-	dialog.present();
 }
 
 pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> gtk::Box {
@@ -913,54 +796,4 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 	}
 	
 	return container;
-}
-
-fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
-	let mut parsed = Vec::new();
-
-	let input: Vec<char> = input.chars().collect();
-	let mut i = 0;
-	while i < input.len() {
-		while input[i].is_whitespace() {
-			i += 1;
-		}
-
-		if input[i] == '"' {
-			i += 1;
-			while input[i] != '"' {
-				if input[i] == ' ' {
-					parsed.push("KEY_SPACE".into());
-				} else if keycodes::key_exists(input[i].to_string().as_str()) {
-					let mut s = String::new();
-					s.push_str("KEY_");
-					s.push_str(input[i].to_uppercase().to_string().as_str());
-					parsed.push(s);
-				} else {
-					return Err(anyhow!("invalid char in quotes"));
-				}
-				i += 1;
-				if i == input.len() {
-					return Err(anyhow!("mismatched quotes"));
-				}
-			}
-			i += 1;
-			continue;
-		}
-		
-		let mut token = String::new();
-		while i < input.len() && !input[i].is_whitespace() {
-			token.push(input[i]);
-			i += 1;
-		}
-		if keycodes::key_exists(token.as_str()) {
-			let mut s = String::new();
-			s.push_str("KEY_");
-			s.push_str(token.to_uppercase().as_str());
-			parsed.push(s);
-		} else {
-			return Err(anyhow!("invalid key"));
-		}
-	}
-
-	return Ok(parsed);
 }
