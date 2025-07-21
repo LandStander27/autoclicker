@@ -102,8 +102,6 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 	button.set_size_request(30, -1);
 	grid.attach(&button, 8, 0, 2, 1);
 
-	// let bytes = glib::Bytes::from_static(include_bytes!("../../../assets/icon.svg"));
-	// let logo = gtk::gdk::Texture::from_bytes(&bytes).expect("gtk-rs.svg to load");
 	button.connect_clicked(clone!(
 		#[weak]
 		window,
@@ -116,19 +114,6 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 				.developer_name("Sam Jones")
 				.build()
 				.present(Some(&window));
-
-			// let dialog = gtk::AboutDialog::builder()
-			// 	.transient_for(&window)
-			// 	.modal(true)
-			// 	.program_name("Autoclicker")
-			// 	.version(version::version)
-			// 	.website("https://codeberg.org/Land/autoclicker")
-			// 	.license_type(gtk::License::MitX11)
-			// 	.authors(["Sam Jones"])
-			// 	.logo(&logo)
-			// 	.build();
-			
-			// dialog.present();
 		}
 	));
 
