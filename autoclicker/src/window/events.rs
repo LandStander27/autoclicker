@@ -198,7 +198,7 @@ pub fn syntax_highlighting(debounce_id: &Arc<Mutex<Option<glib::SourceId>>>, buf
 			let mut iter = buffer.start_iter();
 			iter.forward_chars((i - token.len()) as i32);
 			let mut end_iter = iter;
-			end_iter.forward_chars(i as i32);
+			end_iter.forward_chars(token.len() as i32);
 			if keycodes::key_exists(token.as_str()) {
 				buffer.apply_tag_by_name("keycode", &iter, &end_iter);
 			} else {
