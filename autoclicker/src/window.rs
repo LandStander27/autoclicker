@@ -97,7 +97,7 @@ impl Default for MouseConfig {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct KeyboardConfig {
-	pub sequence: Vec<String>,
+	pub sequence: Vec<Vec<String>>,
 	pub raw_sequence: String,
 	pub enter_after: bool,
 	pub repeat: u64,

@@ -163,7 +163,7 @@ pub fn syntax_highlighting(debounce_id: &Arc<Mutex<Option<glib::SourceId>>>, buf
 		'outer: while i < input.len() {
 			while input[i].is_whitespace() {
 				i += 1;
-				if input.len() - 1 <= i {
+				if input.len() - 1 < i {
 					break 'outer;
 				}
 			}
@@ -189,8 +189,22 @@ pub fn syntax_highlighting(debounce_id: &Arc<Mutex<Option<glib::SourceId>>>, buf
 				continue;
 			}
 			
+			let is_mod = i < input.len() && input[i] == '+';
+			if is_mod {
+				i += 1;
+				if i >= input.len() {
+					break 'outer;
+				}
+				while input[i].is_whitespace() {
+					if i >= input.len() - 1 {
+						break 'outer;
+					}
+					i += 1;
+				}
+			}
+
 			let mut token = String::new();
-			while i < input.len() && !input[i].is_whitespace() {
+			while i < input.len() && !input[i].is_whitespace() && input[i] != '+' {
 				token.push(input[i]);
 				i += 1;
 			}
@@ -211,7 +225,7 @@ pub fn syntax_highlighting(debounce_id: &Arc<Mutex<Option<glib::SourceId>>>, buf
 	*debounce_id.lock().unwrap() = Some(id);
 }
 
-pub fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
+pub fn parse_sequence(input: String) -> anyhow::Result<Vec<Vec<String>>> {
 	let mut parsed = Vec::new();
 
 	let input: Vec<char> = input.chars().collect();
@@ -231,12 +245,16 @@ pub fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
 			i += 1;
 			while input[i] != '"' {
 				if input[i] == ' ' {
-					parsed.push("KEY_SPACE".into());
+					parsed.push(vec!["KEY_SPACE".into()]);
 				} else if keycodes::key_exists(input[i].to_string().as_str()) {
 					let mut s = String::new();
 					s.push_str("KEY_");
 					s.push_str(input[i].to_uppercase().to_string().as_str());
-					parsed.push(s);
+					if input[i].is_uppercase() {
+						parsed.push(vec!["KEY_LEFTSHIFT".into(), s]);
+					} else {
+						parsed.push(vec![s]);
+					}
 				} else {
 					return Err(anyhow!("invalid char in quotes"));
 				}
@@ -249,8 +267,21 @@ pub fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
 			continue;
 		}
 		
+		let is_mod = i < input.len() && input[i] == '+';
+		if is_mod {
+			i += 1;
+			if i >= input.len() {
+				return Err(anyhow!("expected key after '+'"))
+			}
+			while input[i].is_whitespace() {
+				if i >= input.len() - 1 {
+					return Err(anyhow!("expected key after '+'"))
+				}
+				i += 1;
+			}
+		}
 		let mut token = String::new();
-		while i < input.len() && !input[i].is_whitespace() {
+		while i < input.len() && !input[i].is_whitespace() && input[i] != '+' {
 			token.push(input[i]);
 			i += 1;
 		}
@@ -258,7 +289,15 @@ pub fn parse_sequence(input: String) -> anyhow::Result<Vec<String>> {
 			let mut s = String::new();
 			s.push_str("KEY_");
 			s.push_str(token.to_uppercase().as_str());
-			parsed.push(s);
+			if is_mod {
+				if let Some(last) = parsed.last_mut() {
+					last.push(s);
+				} else {
+					return Err(anyhow!("unexpected '+'"));
+				}
+			} else {
+				parsed.push(vec![s]);
+			}
 		} else {
 			return Err(anyhow!("invalid key"));
 		}

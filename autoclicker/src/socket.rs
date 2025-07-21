@@ -70,7 +70,7 @@ pub fn send_keyboard_request(config: &KeyboardConfig) -> anyhow::Result<()> {
 	let mut stream = UnixStream::connect(socket_file()).context("could not connect to socket")?;
 	let mut seq = config.sequence.clone();
 	if config.enter_after {
-		seq.push("KEY_ENTER".into());
+		seq.push(vec!["KEY_ENTER".into()]);
 	}
 	let request = Message::RepeatingKeyboardClick(RepeatingKeyboardClick {
 		button: seq,

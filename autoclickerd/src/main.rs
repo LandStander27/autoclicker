@@ -91,11 +91,10 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 	let mut last_click = std::time::Instant::now();
 	let mut amount_clicked: u128 = 0;
 
-	let mut parsed_keys: Vec<EV_KEY> = Vec::new();
+	let mut parsed_keys: Vec<Vec<EV_KEY>> = Vec::new();
 	let mut current_key: usize = 0;
 	let mut last_repeat = std::time::Instant::now();
 	let mut is_holding: bool = false;
-	let mut clicked_key: EV_KEY = EV_KEY::KEY_MAX;
 
 	'outer: loop {
 		if exiting.load(Ordering::Relaxed) {
@@ -110,15 +109,19 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				last_message = msg;
 				if let Message::RepeatingKeyboardClick(ref event) = last_message {
 					parsed_keys.clear();
-					for key in &event.button {
-						let ev_key: EV_KEY = match key.parse() {
-							Ok(o) => o,
-							Err(_) => {
-								warn!("invalid keycode");
-								continue 'outer;
-							},
-						};
-						parsed_keys.push(ev_key);
+					for keys in &event.button {
+						let mut outer = Vec::new();
+						for key in keys {
+							let ev_key: EV_KEY = match key.parse() {
+								Ok(o) => o,
+								Err(_) => {
+									warn!("invalid keycode");
+									continue 'outer;
+								},
+							};
+							outer.push(ev_key);
+						}
+						parsed_keys.push(outer);
 					}
 					current_key = 0;
 				}
@@ -160,11 +163,13 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				}
 
 				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
-					keyboard.release_keyboard_button(clicked_key)?;
-					amount_clicked += 1;
+					for key in parsed_keys[current_key].iter().rev() {
+						keyboard.release_keyboard_button(*key)?;
+					}
 					last_repeat = std::time::Instant::now();
 					current_key += 1;
 					if current_key == parsed_keys.len() {
+						amount_clicked += 1;
 						current_key = 0;
 					}
 					is_holding = false;
@@ -175,9 +180,10 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				if last_click.elapsed().as_millis() >= click.interval as u128 {
 					last_click = std::time::Instant::now();
 
-					keyboard.press_keyboard_button(parsed_keys[current_key])?;
+					for key in &parsed_keys[current_key] {
+						keyboard.press_keyboard_button(*key)?;
+					}
 					is_holding = true;
-					clicked_key = parsed_keys[current_key];
 				}
 			}
 			_ => todo!()

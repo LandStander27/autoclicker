@@ -27,7 +27,7 @@ pub struct RepeatingMouseClick {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RepeatingKeyboardClick {
-	pub button: Vec<String>,
+	pub button: Vec<Vec<String>>,
 	pub amount: u64,
 	pub interval: u64,
 	pub delay_before_repeat: u64,
