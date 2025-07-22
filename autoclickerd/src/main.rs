@@ -38,6 +38,11 @@ use vmouse::*;
 use vkeyboard::*;
 use common::prelude::*;
 
+#[inline]
+fn sleepms(ms: u64) {
+	std::thread::sleep(std::time::Duration::from_millis(ms));
+}
+
 fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Result<()> {
 	let mut msg = String::new();
 	stream.read_to_string(&mut msg).context("failed to read stream")?;
@@ -96,12 +101,13 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 	let mut last_repeat = std::time::Instant::now();
 	let mut is_holding: bool = false;
 
+	let timeout = std::time::Duration::from_millis(5);
 	'outer: loop {
 		if exiting.load(Ordering::Relaxed) {
 			break;
 		}
 
-		match rx.try_recv() {
+		match rx.recv_timeout(timeout) {
 			Ok(msg) => {
 				trace!("got msg from channel");
 				last_click = std::time::Instant::now();
@@ -128,7 +134,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 			}
 
 			Err(e) => {
-				if e != mpsc::TryRecvError::Empty {
+				if e != mpsc::RecvTimeoutError::Timeout {
 					panic!("recv_error: {e}");
 				}
 			}
@@ -263,6 +269,7 @@ fn main() -> anyhow::Result<()> {
 
 			Err(ref e) => {
 				if e.kind() == std::io::ErrorKind::WouldBlock {
+					sleepms(25);
 					continue;
 				}
 				res.context("failed at accepting connection on socket")?;
