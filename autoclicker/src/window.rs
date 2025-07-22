@@ -155,6 +155,8 @@ impl Window {
 		window.set_resizable(false);
 		window.set_title(Some(&window_name));
 		window.set_default_size(width, height);
+		let style_manager = libadwaita::StyleManager::default();
+		style_manager.set_color_scheme(libadwaita::ColorScheme::ForceDark);
 
 		let container = gtk::Box::builder()
 			.orientation(gtk::Orientation::Vertical)

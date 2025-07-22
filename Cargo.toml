@@ -12,8 +12,6 @@ tracing-subscriber = "0.3.19"
 clap = { version = "4.5.41", features = [ "derive" ] }
 anyhow = "1.0.98"
 nix = { version = "0.30.1", features = [ "user" ] }
-serde_json = "1.0.141"
-serde = { version = "1.0.219", features = [ "derive" ] }
 
 version = { path = "version" }
 common = { path = "common" }
