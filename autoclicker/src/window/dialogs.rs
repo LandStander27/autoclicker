@@ -281,12 +281,49 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 			dialog.close();
 		}
 	));
-	
+	let key_controller = gtk::EventControllerKey::new();
+	key_controller.connect_key_pressed(clone!(
+		#[weak]
+		config,
+		#[weak]
+		entry,
+		#[weak]
+		window,
+		#[weak]
+		dialog,
+		#[upgrade_or]
+		glib::Propagation::Proceed,
+		move |_, keyval, _keycode, state| {
+			if keyval == gtk::gdk::Key::Return && state.contains(gtk::gdk::ModifierType::SHIFT_MASK) {
+				let mut config = config.lock().unwrap();
+				let buffer = entry.buffer();
+				let (start, end) = buffer.bounds();
+				let text = buffer.text(&start, &end, true).to_string();
+
+				config.keyboard.raw_sequence = text.clone();
+				config.keyboard.sequence = match events::parse_sequence(text) {
+					Ok(o) => o,
+					Err(e) => {
+						glib::MainContext::default().spawn_local(error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
+						return glib::Propagation::Stop;
+					}
+				};
+				tracing::debug!(?config);
+				dialog.close();
+				
+				return glib::Propagation::Stop;
+			}
+
+			glib::Propagation::Proceed
+		}
+	));
+	entry.add_controller(key_controller);
+
 	button_grid.attach(&cancel_button, 0, 0, 1, 1);
 	button_grid.attach(&ok_button, 1, 0, 1, 1);
-	
+
 	vbox.append(&button_grid);
-	
+
 	dialog.present();
 }
 
