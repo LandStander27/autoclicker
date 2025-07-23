@@ -56,18 +56,12 @@ impl Mouse {
 
 	#[inline]
 	pub fn move_mouse(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
-		if x.is_some() {
-			self.send_event(EventCode::EV_REL(EV_REL::REL_X), i32::MIN)?;
-		}
-		if y.is_some() {
-			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), i32::MIN)?;
-		}
-		self.send_sync()?;
+		self.move_mouse_relative(Some(i32::MIN), Some(i32::MIN))?;
 		self.move_mouse_relative(x, y)?;
 
 		return Ok(());
 	}
-	
+
 	#[inline]
 	pub fn click_mouse_button(&self, button: MouseButton) -> anyhow::Result<()> {
 		match button {
