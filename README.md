@@ -94,14 +94,14 @@ autoclicker
 systemctl --user enable --now autoclickerd.service
 ```
 - If a `systemctl` error is happening when starting the daemon, whether it be from the console or GUI, make sure `ls -l /dev/uinput` displays the correct permissions and group:
-```sh
-crw-rw----+ 1 root input 10, 223 Jul 23 01:28 /dev/uinput
-```
-If they are wrong:
-```sh
-echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
-
-# Restart udev, or reboot
-sudo udevadm control --reload
-sudo udevadm trigger
-```
+  ```sh
+  crw-rw----+ 1 root input 10, 223 Jul 23 01:28 /dev/uinput
+  ```
+  If they are wrong:
+  ```sh
+  echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
+  
+  # Restart udev, or reboot
+  sudo udevadm control --reload
+  sudo udevadm trigger
+  ```
