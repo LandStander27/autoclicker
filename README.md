@@ -86,6 +86,8 @@ autoclicker
 4. Enjoy!
 
 ## 🗒️ Notes
+- Because of Wayland limitations, if you have multiple monitors the cursor might not move to the correct location for every click. If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower.
+- There is a configutation file at `~/.config/dev.land.Autoclicker/config.toml`, although there are not many options yet.
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
 ```sh
