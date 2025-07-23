@@ -89,16 +89,16 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 		));
 	});
 
-	let clone = config.clone();
+	let config_clone = config.clone();
 	window.connect_close_request(move |_| {
 		runtime().block_on(async {
 			if let Err(e) = crate::shortcuts::stop_session().await {
 				tracing::error!("could not close session: {e}");
 			}
 		});
-		let config: std::sync::MutexGuard<'_, Config> = clone.lock().unwrap();
-		confy::store("dev.land.Autoclicker", None, config.deref()).unwrap();
-
+		let config: std::sync::MutexGuard<'_, Config> = config_clone.lock().unwrap();
+		confy::store("dev.land.Autoclicker", Some("app-data"), config.deref()).unwrap();
+		
 		return glib::Propagation::Proceed;
 	});
 

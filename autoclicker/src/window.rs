@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 use serde::{Serialize, Deserialize};
+use anyhow::Context;
 
 mod widgets;
 // mod shortcut;
@@ -127,17 +128,27 @@ pub(super) struct Config {
 	pub keyboard: KeyboardConfig,
 }
 
+#[derive(Default, Serialize, Deserialize)]
+pub(super) struct Settings {
+	pub disable_window_controls: bool,
+}
+
 pub struct Window {
 	app: Application,
 }
 
 impl Window {
 	pub fn new<S: Into<String>>(class: S, title: S, width: i32, height: i32) -> Self {
-		let app = Application::builder().application_id(class.into()).build();
 		let title = title.into();
+		let class = class.into();
+		let app = Application::builder().application_id(class.clone()).build();
 		app.connect_activate(move |app| {
 			let title = title.clone();
-			Window::build_ui(app, title, width, height);
+			let class = class.clone();
+			if let Err(e) = Window::build_ui(app, class, title, width, height) {
+				tracing::error!("{e}");
+				std::process::exit(1);
+			}
 		});
 
 		return Self {
@@ -149,14 +160,50 @@ impl Window {
 		self.app.run();
 	}
 
-	fn build_ui(application: &Application, window_name: String, width: i32, height: i32) {
+	fn build_titlebar(switcher: &gtk::StackSwitcher, settings: Arc<Mutex<Settings>>) -> libadwaita::HeaderBar {
+		// let provider = gtk::CssProvider::new();
+		// 	provider.load_from_data("
+		// 		titlebar windowcontrols {
+		// 			visible: false;
+		// 		}
+		// 	");
+		// if let Some(display) = gtk::gdk::Display::default() {
+		// 	gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+		// }
+
+		let header = libadwaita::HeaderBar::new();
+
+		header.set_title_widget(Some(switcher));
+		if settings.lock().unwrap().disable_window_controls {
+			header.set_show_end_title_buttons(false);
+		}
+		// let icon = gtk::Image::from_icon_name("emblem-system-symbolic");
+		// let button = gtk::Button::new();
+		// button.set_child(Some(&icon));
+		// header.pack_end(&button);
+		// let clone = settings.clone();
+		// button.connect_clicked(gtk::glib::clone!(
+		// 	#[weak]
+		// 	window,
+		// 	move |_| {
+		// 		let settings = clone.clone();
+		// 		dialogs::settings_dialog(&window, settings);
+		// 	}
+		// ));
+		
+		return header;
+	}
+
+	fn build_ui(application: &Application, class: String, window_name: String, width: i32, height: i32) -> anyhow::Result<()> {
+		let display = gtk::gdk::Display::default().unwrap();
+		let style_manager = libadwaita::StyleManager::for_display(&display);
+		style_manager.set_color_scheme(libadwaita::ColorScheme::PreferDark);
+
 		let window = ApplicationWindow::new(application);
 
 		window.set_resizable(false);
 		window.set_title(Some(&window_name));
 		window.set_default_size(width, height);
-		let style_manager = libadwaita::StyleManager::default();
-		style_manager.set_color_scheme(libadwaita::ColorScheme::ForceDark);
 
 		let container = gtk::Box::builder()
 			.orientation(gtk::Orientation::Vertical)
@@ -169,11 +216,12 @@ impl Window {
 			.spacing(24)
 			.build();
 
-		let config = Arc::new(Mutex::new(confy::load("dev.land.Autoclicker", None).unwrap()));
-		
+		let config: Arc<Mutex<Config>> = Arc::new(Mutex::new(confy::load(class.as_str(), Some("app-data")).context("could not load app-data")?));
+		let settings: Arc<Mutex<Settings>> = Arc::new(Mutex::new(confy::load(class.as_str(), Some("config")).context("could not load settings")?));
+
 		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
 		let switcher = StackSwitcher::builder().stack(&stack).build();
-		container.append(&switcher);
+		window.set_titlebar(Some(&Window::build_titlebar(&switcher, settings.clone())));
 		container.append(&stack);
 
 		{
@@ -213,5 +261,7 @@ impl Window {
 		container.append(&widgets::start_clicking(&window, config));
 		window.set_child(Some(&container));
 		window.present();
+		
+		return Ok(());
 	}
 }

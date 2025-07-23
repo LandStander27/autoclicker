@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use super::{runtime, events, Config};
 use crate::unix;
 
-pub async fn error_dialog(window: gtk::ApplicationWindow, title: &str, msg: String) {
+pub async fn error_dialog(window: ApplicationWindow, title: &str, msg: String) {
 	tracing::debug!("opening error dialog");
 	let info_dialog = gtk::AlertDialog::builder()
 		.modal(true)
@@ -20,6 +20,73 @@ pub async fn error_dialog(window: gtk::ApplicationWindow, title: &str, msg: Stri
 
 	info_dialog.show(Some(&window));
 }
+
+// pub fn settings_dialog(window: &ApplicationWindow, settings: Arc<Mutex<Settings>>) {
+// 	let dialog = gtk::Window::builder()
+// 		.transient_for(window)
+// 		.modal(true)
+// 		.title("Key sequence")
+// 		.default_width(500)
+// 		.default_height(500)
+// 		.build();
+	
+// 	let vbox = gtk::Box::builder()
+// 		.orientation(gtk::Orientation::Vertical)
+// 		.margin_top(24)
+// 		.margin_bottom(24)
+// 		.margin_start(24)
+// 		.margin_end(24)
+// 		.halign(gtk::Align::Fill)
+// 		.valign(gtk::Align::Fill)
+// 		.spacing(12)
+// 		.hexpand(true)
+// 		.vexpand(true)
+// 		.build();
+	
+// 	let scrollable = gtk::ScrolledWindow::builder()
+// 		.vexpand(true)
+// 		.hexpand(true)
+// 		.build();
+
+// 	dialog.set_child(Some(&vbox));
+// 	vbox.append(&scrollable);
+// 	let button_grid = gtk::Grid::builder()
+// 		.row_spacing(6)
+// 		.column_spacing(6)
+// 		.column_homogeneous(true)
+// 		.row_homogeneous(true)
+// 		.build();
+	
+// 	let cancel_button = gtk::Button::with_label("Cancel");
+// 	cancel_button.connect_clicked(clone!(
+// 		#[weak]
+// 		dialog,
+// 		move |_| {
+// 			dialog.close();
+// 		}
+// 	));
+	
+// 	let ok_button = gtk::Button::with_label("Ok");
+// 	ok_button.add_css_class("suggested-action");
+// 	ok_button.connect_clicked(clone!(
+// 		#[weak]
+// 		settings,
+// 		#[weak]
+// 		dialog,
+// 		move |_| {
+// 			let settings = settings.lock().unwrap();
+			
+// 			dialog.close();
+// 		}
+// 	));
+	
+// 	button_grid.attach(&cancel_button, 0, 0, 1, 1);
+// 	button_grid.attach(&ok_button, 1, 0, 1, 1);
+	
+// 	vbox.append(&button_grid);
+	
+// 	dialog.present();
+// }
 
 pub async fn enable_service_dialog(window: ApplicationWindow) {
 	let question_dialog = gtk::AlertDialog::builder()

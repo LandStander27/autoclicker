@@ -24,12 +24,6 @@ impl Mouse {
 		mouse.set_vendor_id(0xabcd);
 		mouse.set_product_id(0xefef);
 		
-		// for key in EV_KEY::KEY_ESC as u32..EV_KEY::KEY_MAX as u32 {
-		// 	if let Some(key) = int_to_ev_key(key) {
-		// 		device.enable(EventCode::EV_KEY(key)).context("could not enable keyboard key")?;
-		// 	}
-		// }
-		
 		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_LEFT)).context("could not enable left mouse key")?;
 		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE)).context("could not enable middle mouse key")?;
 		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_RIGHT)).context("could not enable right mouse key")?;
@@ -47,15 +41,8 @@ impl Mouse {
 		});
 	}
 
-	pub fn move_mouse(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
-		if x.is_some() {
-			self.send_event(EventCode::EV_REL(EV_REL::REL_X), i32::MIN)?;
-		}
-		if y.is_some() {
-			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), i32::MIN)?;
-		}
-		self.send_sync()?;
-
+	#[inline]
+	pub fn move_mouse_relative(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
 		if let Some(x) = x {
 			self.send_event(EventCode::EV_REL(EV_REL::REL_X), x)?;
 		}
@@ -66,7 +53,22 @@ impl Mouse {
 		
 		return Ok(());
 	}
+
+	#[inline]
+	pub fn move_mouse(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
+		if x.is_some() {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_X), i32::MIN)?;
+		}
+		if y.is_some() {
+			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), i32::MIN)?;
+		}
+		self.send_sync()?;
+		self.move_mouse_relative(x, y)?;
+
+		return Ok(());
+	}
 	
+	#[inline]
 	pub fn click_mouse_button(&self, button: MouseButton) -> anyhow::Result<()> {
 		match button {
 			MouseButton::Left => {

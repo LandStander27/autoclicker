@@ -32,6 +32,7 @@ impl Keyboard {
 		});
 	}
 
+	#[inline]
 	pub fn release_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
 		self.send_event(EventCode::EV_KEY(key), 0)?;
 		self.send_sync()?;
@@ -39,6 +40,7 @@ impl Keyboard {
 		return Ok(());
 	}
 	
+	#[inline]
 	pub fn press_keyboard_button(&self, key: EV_KEY) -> anyhow::Result<()> {
 		self.send_event(EventCode::EV_KEY(key), 1)?;
 		self.send_sync()?;

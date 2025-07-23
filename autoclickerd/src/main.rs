@@ -34,6 +34,7 @@ struct Args {
 mod vdevice;
 mod vmouse;
 mod vkeyboard;
+mod hypr;
 use vmouse::*;
 use vkeyboard::*;
 use common::prelude::*;
@@ -149,7 +150,13 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 				
 				if last_click.elapsed().as_millis() >= click.interval as u128 {
 					last_click = std::time::Instant::now();
-					mouse.move_mouse(click.position.0, click.position.1)?;
+					if click.position.0.is_some() || click.position.1.is_some() {
+						if hypr::is_hyprland() {
+							hypr::move_mouse(&mouse, click.position.0, click.position.1)?;
+						} else {
+							mouse.move_mouse(click.position.0, click.position.1)?;
+						}
+					}
 					do_mouse_click(&click.button, &mouse)?;
 					if click.typ == "double" {
 						std::thread::sleep(std::time::Duration::from_millis(50));
