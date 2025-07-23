@@ -78,9 +78,9 @@ sudo pacman -Rs git rust sed libgit2
 
 ## 🛠️ Usage
 1. Launch the GUI from your app launcher or by running:
-```sh
-autoclicker
-```
+  ```sh
+  autoclicker
+  ```
 2. Customize the timing, click type, etc.
 3. Define a global shortcut through your system's shortcut manager (using the XDG portal)
 4. Enjoy!
@@ -90,9 +90,9 @@ autoclicker
 - There is a configutation file at `~/.config/dev.land.Autoclicker/config.toml`, although there are not many options yet.
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
-```sh
-systemctl --user enable --now autoclickerd.service
-```
+  ```sh
+  systemctl --user enable --now autoclickerd.service
+  ```
 - If a `systemctl` error is happening when starting the daemon, whether it be from the console or GUI, make sure `ls -l /dev/uinput` displays the correct permissions and group:
   ```sh
   crw-rw----+ 1 root input 10, 223 Jul 23 01:28 /dev/uinput
