@@ -6,6 +6,7 @@ Type=simple
 Restart=always
 ExecStart=/usr/bin/autoclickerd
 ExecStop=/usr/bin/kill -HUP $MAINPID
+ExecStop=sleep 1
 KillMode=process
 TimeoutSec=180
 
