@@ -138,4 +138,4 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
   ```
 
 ### Hyprland
-Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for every click.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. You can turn this off in the config.
+Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for every click.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. See [Daemon](#daemon) to disable.
