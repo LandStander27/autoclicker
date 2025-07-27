@@ -86,6 +86,7 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 fn settings() -> Arc<Mutex<config::Settings>> {
 	static SETTINGS: OnceLock<Arc<Mutex<config::Settings>>> = OnceLock::new();
 	if SETTINGS.get().is_none() {
+		info!("loading config");
 		let conf = match config::load() {
 			Ok(o) => o,
 			Err(e) => {
