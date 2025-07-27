@@ -13,6 +13,7 @@ use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 use serde::{Serialize, Deserialize};
 use anyhow::Context;
+use common::prelude::*;
 
 mod widgets;
 // mod shortcut;
@@ -22,6 +23,21 @@ mod events;
 fn runtime() -> &'static Runtime {
 	static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
+}
+
+pub(crate) fn settings() -> Arc<Mutex<config::Settings>> {
+	static SETTINGS: OnceLock<Arc<Mutex<config::Settings>>> = OnceLock::new();
+	if SETTINGS.get().is_none() {
+		let conf = match config::load() {
+			Ok(o) => o,
+			Err(e) => {
+				tracing::error!("could not get settings: {e}");
+				std::process::exit(1);
+			}
+		};
+		return SETTINGS.get_or_init(move || Arc::new(Mutex::new(conf))).clone();
+	}
+	return SETTINGS.get().unwrap().clone();
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,7 +53,7 @@ impl Default for MouseButton {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(super) enum Screen {
 	Mouse,
 	Keyboard,
@@ -128,11 +144,6 @@ pub(super) struct Config {
 	pub keyboard: KeyboardConfig,
 }
 
-#[derive(Default, Serialize, Deserialize)]
-pub(super) struct Settings {
-	pub disable_window_controls: bool,
-}
-
 pub struct Window {
 	app: Application,
 }
@@ -160,36 +171,13 @@ impl Window {
 		self.app.run();
 	}
 
-	fn build_titlebar(switcher: &gtk::StackSwitcher, settings: Arc<Mutex<Settings>>) -> libadwaita::HeaderBar {
-		// let provider = gtk::CssProvider::new();
-		// 	provider.load_from_data("
-		// 		titlebar windowcontrols {
-		// 			visible: false;
-		// 		}
-		// 	");
-		// if let Some(display) = gtk::gdk::Display::default() {
-		// 	gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
-		// }
-
+	fn build_titlebar(switcher: &gtk::StackSwitcher) -> libadwaita::HeaderBar {
 		let header = libadwaita::HeaderBar::new();
 
 		header.set_title_widget(Some(switcher));
-		if settings.lock().unwrap().disable_window_controls {
+		if settings().lock().unwrap().client.disable_window_controls {
 			header.set_show_end_title_buttons(false);
 		}
-		// let icon = gtk::Image::from_icon_name("emblem-system-symbolic");
-		// let button = gtk::Button::new();
-		// button.set_child(Some(&icon));
-		// header.pack_end(&button);
-		// let clone = settings.clone();
-		// button.connect_clicked(gtk::glib::clone!(
-		// 	#[weak]
-		// 	window,
-		// 	move |_| {
-		// 		let settings = clone.clone();
-		// 		dialogs::settings_dialog(&window, settings);
-		// 	}
-		// ));
 		
 		return header;
 	}
@@ -217,11 +205,10 @@ impl Window {
 			.build();
 
 		let config: Arc<Mutex<Config>> = Arc::new(Mutex::new(confy::load(class.as_str(), Some("app-data")).context("could not load app-data")?));
-		let settings: Arc<Mutex<Settings>> = Arc::new(Mutex::new(confy::load(class.as_str(), Some("config")).context("could not load settings")?));
 
 		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
 		let switcher = StackSwitcher::builder().stack(&stack).build();
-		window.set_titlebar(Some(&Window::build_titlebar(&switcher, settings.clone())));
+		window.set_titlebar(Some(&Window::build_titlebar(&switcher)));
 		container.append(&stack);
 
 		{
@@ -249,7 +236,11 @@ impl Window {
 			
 			stack.add_titled(&container, Some("keyboard"), "Keyboard");
 		}
-		
+
+		if config.lock().unwrap().screen == Screen::Keyboard {
+			stack.set_visible_child_name("keyboard");
+		}
+
 		let clone = config.clone();
 		stack.connect_notify_local(Some("visible-child-name"), move |stack, _| {
 			let mut config = clone.lock().unwrap();

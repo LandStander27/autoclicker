@@ -6,5 +6,6 @@ pub use crate::{
 	ConfirmResponse,
 	Message,
 	Json,
-	Error as ErrorResponse
+	Error as ErrorResponse,
+	config
 };

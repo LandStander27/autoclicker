@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod prelude;
+pub mod config;
 
 pub trait Json<T: for<'de> Deserialize<'de> + Serialize = Self> {
 	fn decode<S: Into<String>>(json: S) -> Result<T, serde_json::Error> {

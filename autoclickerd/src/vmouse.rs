@@ -40,7 +40,7 @@ impl Mouse {
 			input,
 		});
 	}
-
+	
 	#[inline]
 	pub fn move_mouse_relative(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
 		if let Some(x) = x {

@@ -12,7 +12,7 @@ use std::{
 			AtomicBool,
 			Ordering
 		},
-		Arc
+		Arc, Mutex, OnceLock
 	}
 };
 use std::sync::mpsc::{self, Sender, Receiver};
@@ -50,9 +50,13 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 
 	let req = Message::decode(msg)?;
 	trace!(?req);
-	
+
 	match req {
 		Message::RepeatingMouseClick(ref event) => {
+			if settings().lock().unwrap().daemon.mouse.disabled {
+				return Err(anyhow!("mouse virtualization has been disabled in the configs"));
+			}
+			
 			if !["left", "right", "middle"].contains(&event.button.as_str()) {
 				warn!("invalid mouse button");
 				return Err(anyhow!("invalid mouse button"));
@@ -63,7 +67,11 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 				return Err(anyhow!("invalid click type"));
 			}
 		}
-		Message::RepeatingKeyboardClick(_) => {}
+		Message::RepeatingKeyboardClick(_) => {
+			if settings().lock().unwrap().daemon.keyboard.disabled {
+				return Err(anyhow!("keyboard virtualization has been disabled in the configs"));
+			}
+		}
 		Message::StopClicking(_) => {}
 		_ => {
 			warn!("invalid request: {req:?}");
@@ -75,9 +83,27 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 	return Ok(());
 }
 
+fn settings() -> Arc<Mutex<config::Settings>> {
+	static SETTINGS: OnceLock<Arc<Mutex<config::Settings>>> = OnceLock::new();
+	if SETTINGS.get().is_none() {
+		let conf = match config::load() {
+			Ok(o) => o,
+			Err(e) => {
+				tracing::error!("could not get settings: {e}");
+				std::process::exit(1);
+			}
+		};
+		return SETTINGS.get_or_init(move || Arc::new(Mutex::new(conf))).clone();
+	}
+	return SETTINGS.get().unwrap().clone();
+}
+
 fn socket_file() -> String {
 	let id = nix::unistd::geteuid();
-	return format!("/run/user/{id}/autoclicker.socket");
+	let arc = settings();
+	let settings = arc.lock().unwrap();
+	let path = &settings.general.socket_path;
+	return path.replace("$id", id.to_string().as_str());
 }
 
 fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
@@ -92,7 +118,10 @@ fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
 	return Ok(());
 }
 
-fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyboard: Keyboard) -> anyhow::Result<()> {
+#[allow(non_upper_case_globals)]
+const recv_timeout: std::time::Duration = std::time::Duration::from_millis(5);
+
+fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mouse>, keyboard: Option<Keyboard>) -> anyhow::Result<()> {
 	let mut last_message = Message::StopClicking(StopClicking {});
 	let mut last_click = std::time::Instant::now();
 	let mut amount_clicked: u128 = 0;
@@ -102,13 +131,13 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 	let mut last_repeat = std::time::Instant::now();
 	let mut is_holding: bool = false;
 
-	let timeout = std::time::Duration::from_millis(5);
+	let daemon_settings = settings().lock().unwrap().daemon.clone();
 	'outer: loop {
 		if exiting.load(Ordering::Relaxed) {
 			break;
 		}
 
-		match rx.recv_timeout(timeout) {
+		match rx.recv_timeout(recv_timeout) {
 			Ok(msg) => {
 				trace!("got msg from channel");
 				last_click = std::time::Instant::now();
@@ -148,19 +177,19 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 					continue;
 				}
 				
-				if last_click.elapsed().as_millis() >= click.interval as u128 {
+				if last_click.elapsed().as_millis() >= (click.interval + daemon_settings.mouse.added_delay) as u128 {
 					last_click = std::time::Instant::now();
 					if click.position.0.is_some() || click.position.1.is_some() {
-						if hypr::is_hyprland() {
-							hypr::move_mouse(&mouse, click.position.0, click.position.1)?;
+						if daemon_settings.hyprland_ipc && hypr::is_hyprland() {
+							hypr::move_mouse(mouse.as_ref().unwrap(), click.position.0, click.position.1)?;
 						} else {
-							mouse.move_mouse(click.position.0, click.position.1)?;
+							mouse.as_ref().unwrap().move_mouse(click.position.0, click.position.1)?;
 						}
 					}
-					do_mouse_click(&click.button, &mouse)?;
+					do_mouse_click(&click.button, mouse.as_ref().unwrap())?;
 					if click.typ == "double" {
 						std::thread::sleep(std::time::Duration::from_millis(50));
-						do_mouse_click(&click.button, &mouse)?;
+						do_mouse_click(&click.button, mouse.as_ref().unwrap())?;
 					}
 					
 					amount_clicked += 1;
@@ -177,7 +206,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 
 				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
 					for key in parsed_keys[current_key].iter().rev() {
-						keyboard.release_keyboard_button(*key)?;
+						keyboard.as_ref().unwrap().release_keyboard_button(*key)?;
 					}
 					last_repeat = std::time::Instant::now();
 					current_key += 1;
@@ -190,11 +219,11 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Mouse, keyb
 					continue;
 				}
 
-				if last_click.elapsed().as_millis() >= click.interval as u128 {
+				if last_click.elapsed().as_millis() >= (click.interval + daemon_settings.keyboard.added_delay) as u128 {
 					last_click = std::time::Instant::now();
 
 					for key in &parsed_keys[current_key] {
-						keyboard.press_keyboard_button(*key)?;
+						keyboard.as_ref().unwrap().press_keyboard_button(*key)?;
 					}
 					is_holding = true;
 				}
@@ -227,14 +256,27 @@ fn main() -> anyhow::Result<()> {
 	signal_hook::flag::register(signal_hook::consts::SIGHUP, hup.clone()).context("could not register SIGHUP hook")?;
 	signal_hook::flag::register(signal_hook::consts::SIGINT, int.clone()).context("could not register SIGINT hook")?;
 
-	trace!("creating virtual mouse");
-	let mouse = Mouse::new().context("could not create virtual mouse")?;
+	let mouse = if !settings().lock().unwrap().daemon.mouse.disabled {
+		trace!("creating virtual mouse");
+		Some(Mouse::new().context("could not create virtual mouse")?)
+	} else {
+		None
+	};
 
-	trace!("creating virtual keyboard");
-	let keyboard = Keyboard::new().context("could not create virtual keyboard")?;
-	
+	let keyboard = if !settings().lock().unwrap().daemon.keyboard.disabled {
+		trace!("creating virtual keyboard");
+		Some(Keyboard::new().context("could not create virtual keyboard")?)
+	} else {
+		None
+	};
+
 	trace!("creating socket");
-	let listener = UnixListener::bind(socket_file()).context("could not create socket")?;
+	let listener = {
+		let path_str = socket_file();
+		let path = std::path::Path::new(&path_str);
+		std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("")))?;
+		UnixListener::bind(path).context("could not create socket")?
+	};
 	listener.set_nonblocking(true).context("could not set socket as nonblocking")?;
 	trace!("binded");
 	info!("listening");
@@ -243,8 +285,31 @@ fn main() -> anyhow::Result<()> {
 	let exiting = Arc::new(AtomicBool::new(false));
 	let clone = exiting.clone();
 	let thread = std::thread::spawn(move || {
-		if let Err(e) = bg_thread(clone, rx, mouse, keyboard) {
-			error!("from bg_thread: {e}");
+		if !settings().lock().unwrap().daemon.dry_run {
+			if let Err(e) = bg_thread(clone, rx, mouse, keyboard) {
+				error!("from bg_thread: {e}");
+			}
+		} else {
+			info!("dry run");
+			loop {
+				if clone.load(Ordering::Relaxed) {
+					break;
+				}
+				
+				match rx.recv_timeout(recv_timeout) {
+					Ok(_) => {
+						trace!("got msg from channel");
+					}
+
+					Err(e) => {
+						if e != mpsc::RecvTimeoutError::Timeout {
+							panic!("recv_error: {e}");
+						}
+					}
+				}
+				
+				sleepms(25);
+			}
 		}
 	});
 
