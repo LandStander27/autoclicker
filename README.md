@@ -95,6 +95,29 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
 |------|-----------|
 | `socket_path` | Path to the unix socket used for communication between the daemon and client. `$id` will be replaced by the current UID. |
 
+### `[client]`
+|Option|Description|
+|------|-----------|
+| `disable_window_controls` | Disable the minimize/close buttons in the UI. Useful for Hyprland-like setups |
+
+### `[daemon]`
+|Option|Description|
+|------|-----------|
+| `hyprland_ipc` | Refer to [Hyprland](#hyprland) |
+| `dry_run` | If `true`, the daemon accepts all requests without actually acting on them. Useful for testing. |
+
+### `[daemon.mouse]`
+|Option|Description|
+|------|-----------|
+| `disabled` | Disable all mouse automation. |
+| `added_delay` | Additional delay added by the daemon for mouse actions; on top of the delay set by the UI. |
+
+### `[daemon.keyboard]`
+|Option|Description|
+|------|-----------|
+| `disabled` | Disable all keyboard automation. |
+| `added_delay` | Additional delay added by the daemon for keyboard actions; on top of the delay set by the UI. |
+
 ## 🗒️ Notes
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
@@ -115,4 +138,4 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
   ```
 
 ### Hyprland
-Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for clicks.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. You can turn this off in the config.
+Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for every click.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. You can turn this off in the config.
