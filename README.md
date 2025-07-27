@@ -85,9 +85,17 @@ sudo pacman -Rs git rust sed libgit2
 3. Define a global shortcut through your system's shortcut manager (using the XDG portal)
 4. Enjoy!
 
+Configuration
+-------------
+
+A configuration file with all defaults is created upon first launch in `$XDG_CONFIG_HOME/cava/config` or `$HOME/.config/cava/config`. Below is a breakdown of each option available.
+
+### `[general]`
+|Option|Description|
+|------|-----------|
+| `socket_path` | Path to the unix socket used for communication between the daemon and client. `$id` will be replaced by the current UID. |
+
 ## 🗒️ Notes
-- Because of Wayland limitations, if you have multiple monitors the cursor might not move to the correct location for every click. If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower.
-- There is a file at `~/.config/dev.land.Autoclicker/config.toml`, which is used for configuring both the daemon and client.
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
   ```sh
@@ -105,3 +113,6 @@ sudo pacman -Rs git rust sed libgit2
   sudo udevadm control --reload
   sudo udevadm trigger
   ```
+
+### Hyprland
+Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for clicks.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. You can turn this off in the config.
