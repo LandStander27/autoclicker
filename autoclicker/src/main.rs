@@ -8,8 +8,9 @@ mod socket;
 mod unix;
 mod shortcuts;
 mod keycodes;
+mod key_parser;
 
-fn main() -> anyhow::Result<()> {
+fn enable_logger() {
 	let subscriber = tracing_subscriber::fmt()
 		.compact()
 		.with_file(false)
@@ -20,9 +21,12 @@ fn main() -> anyhow::Result<()> {
 		.without_time()
 		.finish();
 	tracing::subscriber::set_global_default(subscriber).unwrap();
-	
-	info!("autoclicker {}", version::version);
+}
+
+fn main() -> anyhow::Result<()> {
+	enable_logger();
 	trace!("registered logger");
+	info!("autoclicker {}", version::version);
 	
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
 	window.run();

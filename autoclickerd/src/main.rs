@@ -18,7 +18,6 @@ use std::{
 use std::sync::mpsc::{self, Sender, Receiver};
 use anyhow::{anyhow, Context};
 use clap::Parser;
-use evdev_rs::enums::EV_KEY;
 
 #[allow(unused)]
 use tracing::{debug, warn, error, info, trace, Level};
@@ -127,10 +126,10 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 	let mut last_click = std::time::Instant::now();
 	let mut amount_clicked: u128 = 0;
 
-	let mut parsed_keys: Vec<Vec<EV_KEY>> = Vec::new();
-	let mut current_key: usize = 0;
+	let mut current_action: usize = 0;
 	let mut last_repeat = std::time::Instant::now();
 	let mut is_holding: bool = false;
+	let mut delay_ms: Option<i64> = None;
 
 	let daemon_settings = settings().lock().unwrap().daemon.clone();
 	'outer: loop {
@@ -144,23 +143,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 				last_click = std::time::Instant::now();
 				amount_clicked = 0;
 				last_message = msg;
-				if let Message::RepeatingKeyboardClick(ref event) = last_message {
-					parsed_keys.clear();
-					for keys in &event.button {
-						let mut outer = Vec::new();
-						for key in keys {
-							let ev_key: EV_KEY = match key.parse() {
-								Ok(o) => o,
-								Err(_) => {
-									warn!("invalid keycode");
-									continue 'outer;
-								},
-							};
-							outer.push(ev_key);
-						}
-						parsed_keys.push(outer);
-					}
-					current_key = 0;
+				if let Message::RepeatingKeyboardClick(_) = last_message {
+					current_action = 0;
 				}
 			}
 
@@ -196,37 +180,79 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 					amount_clicked += 1;
 				}
 			}
-			Message::RepeatingKeyboardClick(ref click) => {
+			Message::RepeatingKeyboardClick(ref click) => {				
 				if click.amount != 0 && amount_clicked >= click.amount as u128 {
 					continue;
 				}
-				
-				if current_key == 0 && last_repeat.elapsed().as_millis() < click.delay_before_repeat as u128 {
+
+				if current_action == 0 && last_repeat.elapsed().as_millis() < click.delay_before_repeat as u128 {
 					continue;
 				}
 
 				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
-					for key in parsed_keys[current_key].iter().rev() {
-						keyboard.as_ref().unwrap().release_keyboard_button(*key)?;
-					}
-					last_repeat = std::time::Instant::now();
-					current_key += 1;
-					if current_key == parsed_keys.len() {
-						amount_clicked += 1;
-						current_key = 0;
+					if let Actions::PressAndRelease(action) = &click.buttons[current_action] {
+						keyboard.as_ref().unwrap().release_keyboard_button(action.parse().unwrap())?;
 					}
 					is_holding = false;
-				} else if is_holding {
+					current_action += 1;
+					if current_action == click.buttons.len() {
+						last_repeat = std::time::Instant::now();
+						amount_clicked += 1;
+						current_action = 0;
+					}
+					last_click = std::time::Instant::now();
+					continue;
+				}
+
+				if let Some(delay) = delay_ms {
+					if last_click.elapsed().as_millis() >= delay as u128 {
+						delay_ms = None;
+					}
 					continue;
 				}
 
 				if last_click.elapsed().as_millis() >= (click.interval + daemon_settings.keyboard.added_delay) as u128 {
-					last_click = std::time::Instant::now();
-
-					for key in &parsed_keys[current_key] {
-						keyboard.as_ref().unwrap().press_keyboard_button(*key)?;
+					match &click.buttons[current_action] {
+						Actions::PressAndRelease(action) => {
+							if let Ok(key) =  action.parse() {
+								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
+								is_holding = true;
+							} else {
+								warn!("invalid keycode");
+								continue 'outer;
+							}
+						}
+						Actions::Press(key) => {
+							if let Ok(key) =  key.parse() {
+								keyboard.as_ref().unwrap().press_keyboard_button(key)?
+							} else {
+								warn!("invalid keycode");
+								continue 'outer;
+							}
+						}
+						Actions::Release(key) => {
+							if let Ok(key) =  key.parse() {
+								keyboard.as_ref().unwrap().release_keyboard_button(key)?
+							} else {
+								warn!("invalid keycode");
+								continue 'outer;
+							}
+						}
+						Actions::Delay(delay) => {
+							delay_ms = Some(*delay);
+						}
+						// _ => todo!(),
 					}
-					is_holding = true;
+
+					if !is_holding {
+						current_action += 1;
+						if current_action == click.buttons.len() {
+							last_repeat = std::time::Instant::now();
+							amount_clicked += 1;
+							current_action = 0;
+						}
+						last_click = std::time::Instant::now();
+					}
 				}
 			}
 			_ => todo!()

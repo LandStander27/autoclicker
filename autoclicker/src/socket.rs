@@ -73,10 +73,11 @@ pub fn send_keyboard_request(config: &KeyboardConfig) -> anyhow::Result<()> {
 	let mut stream = UnixStream::connect(socket_file()).context("could not connect to socket")?;
 	let mut seq = config.sequence.clone();
 	if config.enter_after {
-		seq.push(vec!["KEY_ENTER".into()]);
+		seq.extend([Actions::Press("KEY_ENTER".into()), Actions::Release("KEY_ENTER".into())]);
 	}
+
 	let request = Message::RepeatingKeyboardClick(RepeatingKeyboardClick {
-		button: seq,
+		buttons: seq,
 		amount: config.repeat,
 		interval: config.interval,
 		delay_before_repeat: config.delay_before_repeat,

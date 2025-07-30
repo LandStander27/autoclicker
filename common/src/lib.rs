@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod prelude;
 pub mod config;
+pub mod actions;
 
 pub trait Json<T: for<'de> Deserialize<'de> + Serialize = Self> {
 	fn decode<S: Into<String>>(json: S) -> Result<T, serde_json::Error> {
@@ -23,12 +24,11 @@ pub struct RepeatingMouseClick {
 	pub amount: u64,
 	pub position: (Option<i32>, Option<i32>),
 	pub interval: u64,
-	// pub delay_until_first_click: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RepeatingKeyboardClick {
-	pub button: Vec<Vec<String>>,
+	pub buttons: Vec<actions::Actions>,
 	pub amount: u64,
 	pub interval: u64,
 	pub delay_before_repeat: u64,

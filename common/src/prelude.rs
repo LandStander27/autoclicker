@@ -7,5 +7,6 @@ pub use crate::{
 	Message,
 	Json,
 	Error as ErrorResponse,
-	config
+	config,
+	actions::Actions,
 };

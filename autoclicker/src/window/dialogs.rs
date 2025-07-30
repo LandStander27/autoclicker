@@ -5,20 +5,103 @@ use gtk::{
 	prelude::*,
 	glib::{self, clone},
 };
+use libadwaita::prelude::{AdwDialogExt, MessageDialogExt};
 use std::sync::{Arc, Mutex};
 
 use super::{runtime, events, Config};
-use crate::unix;
+use crate::{unix, key_parser};
 
 pub async fn error_dialog(window: ApplicationWindow, title: &str, msg: String) {
 	tracing::debug!("opening error dialog");
-	let info_dialog = gtk::AlertDialog::builder()
+
+	let dialog = libadwaita::MessageDialog::builder()
+		.title(title)
+		.transient_for(&window)
+		.default_width(400)
 		.modal(true)
-		.message(title)
-		.detail(msg)
 		.build();
 
-	info_dialog.show(Some(&window));
+	// let label = gtk::Label::new(Some(&msg));
+	// label.set_wrap(true);
+	// label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+	// label.set_valign(gtk::Align::Start);
+	// label.set_vexpand(true);
+
+	// dialog.set_child(Some(&label));
+	dialog.set_heading(Some(title));
+	dialog.set_body(msg.as_str());
+	
+	dialog.add_response("ok", "Ok");
+	dialog.set_default_response(Some("ok"));
+	dialog.set_close_response("ok");
+	
+	let css = gtk::CssProvider::new();
+	css.load_from_data("label.body { font-family: monospace; }");
+	let display = gtk::prelude::WidgetExt::display(&dialog);
+	gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+	
+	// dialog.set_response_enabled("ok", true);
+	
+	dialog.present();
+	
+	// dialog.present(Some(&window));
+	
+	// let dialog = gtk::Window::builder()
+	// 	.transient_for(&window)
+	// 	.modal(true)
+	// 	.title(title)
+	// 	.build();
+	
+	// dialog.set_hide_on_close(true);
+	// dialog.set_destroy_with_parent(true);
+	
+	// let clamp = libadwaita::Clamp::builder()
+	// 	.margin_top(24)
+	// 	.margin_bottom(24)
+	// 	.margin_start(24)
+	// 	.margin_end(24)
+	// 	.build();
+	
+	// let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+	// let title_label = gtk::Label::new(Some(title));
+	// title_label.set_halign(gtk::Align::Center);
+	// title_label.set_css_classes(&["title-3"]);
+	
+	// let detail_label = gtk::Label::new(Some(&msg));
+	// detail_label.set_wrap(true);
+	// detail_label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+	// detail_label.set_halign(gtk::Align::Center);
+	
+	// let button_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+	// button_box.set_halign(gtk::Align::Center);
+	// button_box.set_hexpand(true);
+
+	// let confirm_btn = gtk::Button::with_label("Ok");
+	// confirm_btn.set_hexpand(true);
+	// confirm_btn.connect_clicked(clone!(
+	// 	#[weak]
+	// 	dialog,
+	// 	move |_| {
+	// 	    dialog.close();
+	// 	}
+	// ));
+
+	// button_box.append(&confirm_btn);
+	// content.append(&title_label);
+	// content.append(&detail_label);
+	// content.append(&button_box);
+	// dialog.add_css_class("dialog");
+	// clamp.set_child(Some(&content));
+	// dialog.set_child(Some(&clamp));
+	
+	// dialog.present();
+	// let info_dialog = gtk::AlertDialog::builder()
+	// 	.modal(true)
+	// 	.message(title)
+	// 	.detail(&msg)
+	// 	.build();
+
+	// info_dialog.show(Some(&window));
 }
 
 // pub fn settings_dialog(window: &ApplicationWindow, settings: Arc<Mutex<Settings>>) {
@@ -270,7 +353,7 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 			let text = buffer.text(&start, &end, true).to_string();
 
 			config.keyboard.raw_sequence = text.clone();
-			config.keyboard.sequence = match events::parse_sequence(text) {
+			config.keyboard.sequence = match key_parser::parse(text) {
 				Ok(o) => o,
 				Err(e) => {
 					glib::MainContext::default().spawn_local(error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
@@ -301,7 +384,7 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 				let text = buffer.text(&start, &end, true).to_string();
 
 				config.keyboard.raw_sequence = text.clone();
-				config.keyboard.sequence = match events::parse_sequence(text) {
+				config.keyboard.sequence = match key_parser::parse(text) {
 					Ok(o) => o,
 					Err(e) => {
 						glib::MainContext::default().spawn_local(error_dialog(window.clone(), "Error: parse_sequence", e.to_string()));
