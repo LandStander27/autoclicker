@@ -1,21 +1,20 @@
 use nom::{
 	branch::alt,
-	bytes::complete::{is_not, tag, take_while, take_while_m_n},
-	character::complete::{alpha1, alphanumeric1, char, multispace1, multispace0, one_of},
-	combinator::{map, map_opt, map_res, recognize, value, verify, opt, cut},
-	multi::{fold, many0, many1, separated_list0},
+	bytes::complete::tag,
+	character::complete::{alpha1, alphanumeric1, char, multispace0, one_of},
+	combinator::{map, recognize, opt, cut},
+	multi::{many0, many1, separated_list0},
 	sequence::{delimited, pair, preceded, terminated},
-	number::be_u64,
 	IResult,
 	Parser,
-	error::{context, make_error, ParseError},
+	error::{context, ParseError},
 	Offset,
 };
 use nom_language::error::{VerboseError, VerboseErrorKind};
 
 use common::prelude::*;
-use tracing::{error, info, trace};
-use anyhow::{Context, anyhow};
+use tracing::{error, info};
+use anyhow::anyhow;
 use std::fmt::Write;
 use crate::keycodes;
 

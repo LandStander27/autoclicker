@@ -1,16 +1,13 @@
 use nom::{
 	branch::alt,
-	bytes::complete::{is_not, tag, take_while, take_while_m_n},
-	character::complete::{alpha1, alphanumeric1, char, multispace1, multispace0},
-	combinator::{map, map_opt, map_res, recognize, value, verify, cut},
-	multi::{fold, many0},
-	sequence::{delimited, pair, preceded},
-	IResult,
+	bytes::complete::{is_not, take_while_m_n},
+	character::complete::{char, multispace1},
+	combinator::{map, map_opt, map_res, value, verify, cut},
+	multi::fold,
+	sequence::{delimited, preceded},
 	Parser,
 	error::context,
-	Offset,
 };
-use nom_language::error::VerboseError;
 
 use super::ParseResult;
 

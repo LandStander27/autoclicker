@@ -5,7 +5,7 @@ use gtk::{
 	prelude::*,
 	glib::{self, clone},
 };
-use libadwaita::prelude::{AdwDialogExt, MessageDialogExt};
+use libadwaita::prelude::MessageDialogExt;
 use std::sync::{Arc, Mutex};
 
 use super::{runtime, events, Config};
