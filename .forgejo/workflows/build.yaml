@@ -24,6 +24,9 @@ jobs:
       - name: Build autoclicker client
         run: 	cargo b --release --package autoclicker
 
+      - name: Run tests
+        run: 	cargo test
+
       - name: Build autoclicker daemon
         run: 	cargo b --release --package autoclickerd
 
