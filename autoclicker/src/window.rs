@@ -16,7 +16,6 @@ use anyhow::Context;
 use common::prelude::*;
 
 mod widgets;
-// mod shortcut;
 mod dialogs;
 mod events;
 
@@ -214,7 +213,15 @@ scrolledwindow > textview.monospace {
 			.spacing(24)
 			.build();
 
-		let config: Arc<Mutex<Config>> = Arc::new(Mutex::new(confy::load(class.as_str(), Some("app-data")).context("could not load app-data")?));
+		let mut res = confy::load(class.as_str(), Some("app-data"));
+		if res.is_err() {
+			let path = confy::get_configuration_file_path(class.as_str(), Some("app-data")).context("could not get config file path")?;
+			std::fs::remove_file(path).context("could not delete app-data file")?;
+			tracing::info!("deleted outdated app-data file");
+			res = confy::load(class.as_str(), Some("app-data"));
+		}
+
+		let config: Arc<Mutex<Config>> = Arc::new(Mutex::new(res.context("could not load app-data")?));
 
 		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
 		let switcher = StackSwitcher::builder().stack(&stack).build();

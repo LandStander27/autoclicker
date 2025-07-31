@@ -178,6 +178,8 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					} else {
 						config.mouse.enabled_axis.0 = false;
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -211,6 +213,8 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					} else {
 						config.mouse.enabled_axis.1 = false;
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -303,6 +307,8 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 							config.mouse.interval = num;
 						}
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -370,6 +376,8 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 						panic!("how did this happen");
 					}
 				};
+				
+				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
 			});
 			
@@ -399,6 +407,8 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 						panic!("how did this happen");
 					}
 				};
+				
+				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
 			});
 			
@@ -477,6 +487,8 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 					} else {
 						0
 					};
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -496,6 +508,8 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 							config.mouse.repeat = s.parse().unwrap();
 						}
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 
 					entry.set_sensitive(btn.is_active());
@@ -633,6 +647,8 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 					} else {
 						0
 					};
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -652,6 +668,8 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 							config.keyboard.repeat = s.parse().unwrap();
 						}
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 
 					entry.set_sensitive(btn.is_active());
@@ -714,6 +732,8 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.delay_before_repeat = num.parse().unwrap();
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -757,6 +777,8 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.hold_duration = num.parse().unwrap();
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));
@@ -800,6 +822,8 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.interval = num.parse().unwrap();
 					}
+					
+					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
 			));

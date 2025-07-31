@@ -33,7 +33,6 @@ enum Literal {
 enum Token<'a> {
 	Sequence(String),
 	Key(String),
-	// Ident(String),
 	Action((String, Vec<Literal>)),
 	Unknown(&'a str),
 }
@@ -181,6 +180,10 @@ fn convert_error(input: &String, err: VerboseError<&str>) -> String {
 }
 
 pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
+	if input.chars().all(|c| c.is_whitespace()) {
+		return Ok(Vec::new());
+	}
+
 	let start = std::time::Instant::now();
 
 	let mut rest: &str = input.as_str();

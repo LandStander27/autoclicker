@@ -225,7 +225,10 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 					return;
 				}
 			};
+			
+			#[cfg(debug_assertions)]
 			tracing::debug!(?config);
+
 			dialog.close();
 		}
 	));
@@ -256,7 +259,10 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 						return glib::Propagation::Stop;
 					}
 				};
+				
+				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
+				
 				dialog.close();
 				
 				return glib::Propagation::Stop;
