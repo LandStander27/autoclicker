@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - "**"
+      - "!README.md"
+      - "!.gitignore"
+      - "!LICENSE"
+      - "!assets/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: docker
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install deps
+        run: pacman --noconfirm --needed -Sy git nodejs cairo gtk4 libadwaita polkit glib2 glibc libevdev rust sed libgit2 pkgconf
+
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: cargo test
