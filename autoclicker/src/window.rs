@@ -193,6 +193,16 @@ impl Window {
 		window.set_title(Some(&window_name));
 		window.set_default_size(width, height);
 
+		let css = gtk::CssProvider::new();
+		css.load_from_data(r#"
+scrolledwindow > textview.monospace {
+	color: red;
+	caret-color: white;
+}
+"#);
+		let display = gtk::prelude::WidgetExt::display(&window);
+		gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+
 		let container = gtk::Box::builder()
 			.orientation(gtk::Orientation::Vertical)
 			.margin_top(24)

@@ -218,7 +218,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
 								is_holding = true;
 							} else {
-								warn!("invalid keycode");
+								warn!("invalid keycode: {action}");
 								continue 'outer;
 							}
 						}
@@ -226,7 +226,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 							if let Ok(key) =  key.parse() {
 								keyboard.as_ref().unwrap().press_keyboard_button(key)?
 							} else {
-								warn!("invalid keycode");
+								warn!("invalid keycode: {key}");
 								continue 'outer;
 							}
 						}
@@ -234,7 +234,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 							if let Ok(key) =  key.parse() {
 								keyboard.as_ref().unwrap().release_keyboard_button(key)?
 							} else {
-								warn!("invalid keycode");
+								warn!("invalid keycode: {key}");
 								continue 'outer;
 							}
 						}

@@ -1,6 +1,6 @@
 use nom::{
 	branch::alt,
-	bytes::complete::tag,
+	bytes::complete::{tag, take_while1},
 	character::complete::{alpha1, alphanumeric1, char, multispace0, one_of},
 	combinator::{map, recognize, opt, cut},
 	multi::{many0, many1, separated_list0},
@@ -30,11 +30,12 @@ enum Literal {
 }
 
 #[derive(Debug)]
-enum Token {
+enum Token<'a> {
 	Sequence(String),
 	Key(String),
 	// Ident(String),
 	Action((String, Vec<Literal>)),
+	Unknown(&'a str),
 }
 
 fn parse_ident(input: &str) -> ParseResult<&str, String> {
@@ -190,6 +191,7 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 			map(strings::parse_string, Token::Sequence),
 			map(func, Token::Action),
 			map(key, Token::Key),
+			map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
 		))).parse(rest).map_err(|e| {
 			match e {
 				nom::Err::Error(ref e) | nom::Err::Failure(ref e) => {
@@ -199,11 +201,6 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 				}
 				_ => {}
 			}
-			// if let nom::Err::Error(ref e) = e {
-			// 	let s = convert_error(&input, e.clone());
-			// 	error!(s);
-			// 	return anyhow!("{s}");
-			// }
 
 			error!(?e);
 			return anyhow!("{e}").context("parse error");
@@ -215,20 +212,73 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 		dbg!(&res.1);
 
 		match res.1 {
+			Token::Unknown(token) => {
+				error!("unknown token: {token}");
+				return Err(anyhow!("unknown token: {token}"));
+			}
 			Token::Sequence(seq) => {
+				macro_rules! press_and_release {
+					($key:expr) => {{
+						actions.push(Actions::PressAndRelease($key.into()));
+					}};
+				}
+
+				macro_rules! holding_shift {
+					($key:expr) => {{
+						actions.push(Actions::Press("KEY_LEFTSHIFT".into()));
+						actions.push(Actions::Press($key.into()));
+
+						actions.push(Actions::Release("KEY_LEFTSHIFT".into()));
+						actions.push(Actions::Release($key.into()));
+					}};
+				}
+
+				macro_rules! generate_match {
+					($c:ident, [ $( ( $key:literal, $without:literal $(, $with:literal)? ) ),* ]) => {{
+						match $c {
+							'A'..='Z' | 'a'..='z' | '0'..='9' => {
+								let mut s = String::new();
+								s.push_str("KEY_");
+								s.push($c.to_ascii_uppercase());
+								actions.push(Actions::PressAndRelease(s));
+							}
+							$(
+								#[allow(unreachable_patterns)] $without => press_and_release!(concat!("KEY_", $key)),
+								$($with => holding_shift!(concat!("KEY_", $key)),)?
+							)*
+							_ => continue
+						}
+					}};
+				}
+
 				for c in seq.chars() {
-					match c {
-						'A'..='Z' | 'a'..='z' => {
-							let mut s = String::new();
-							s.push_str("KEY_");
-							s.push(c.to_ascii_uppercase());
-							actions.push(Actions::PressAndRelease(s));
-						}
-						' ' => {
-							actions.push(Actions::PressAndRelease("KEY_SPACE".into()));
-						}
-						_ => continue
-					}
+					generate_match!(c, [
+						("MINUS", '-', '_'),
+						("EQUAL", '=', '+'),
+						("TAB", '\t'),
+						("LEFTBRACE", '[', '{'),
+						("RIGHTBRACE", ']', '}'),
+						("ENTER", '\n'),
+						("SEMICOLON", ';', ':'),
+						("APOSTROPHE", '\'', '\"'),
+						("GRAVE", '`', '~'),
+						("BACKSLASH", '\\', '|'),
+						("COMMA", ',', '<'),
+						("DOT", '.', '>'),
+						("SLASH", '/', '?'),
+						("SPACE", ' '),
+						
+						("1", '\0', '!'),
+						("2", '\0', '@'),
+						("3", '\0', '#'),
+						("4", '\0', '$'),
+						("5", '\0', '%'),
+						("6", '\0', '^'),
+						("7", '\0', '&'),
+						("8", '\0', '*'),
+						("9", '\0', '('),
+						("0", '\0', ')')
+					]);
 				}
 			}
 			Token::Key(kw) => {
@@ -288,4 +338,74 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 	
 	info!("parsing done; took {}ms", start.elapsed().as_millis());
 	return Ok(actions);
+}
+
+macro_rules! tag_buffer {
+	($buffer:ident, $start:expr, $len:expr, $tag:expr) => {{
+		let mut iter = $buffer.start_iter();
+		iter.forward_chars($start as i32);
+		let mut end_iter = iter;
+		end_iter.forward_chars($len as i32);
+		$buffer.apply_tag_by_name($tag, &iter, &end_iter);
+	}};
+}
+
+pub(crate) fn syntax_highlighting(buffer: &gtk4::TextBuffer) {
+	use gtk4 as gtk;
+	use gtk::prelude::*;
+	
+	buffer.remove_all_tags(&buffer.start_iter(), &buffer.end_iter());
+	let input = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+	let mut offset: usize = 0;
+	let mut rest: &str = input.as_str();
+
+	fn inner(rest: &str) -> anyhow::Result<(&str, Token)> {
+		let res = preceded(multispace0, alt((
+			map(strings::parse_string, Token::Sequence),
+			map(func, Token::Action),
+			map(key, Token::Key),
+			map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
+		))).parse(rest).map_err(|e| {
+			error!(?e);
+			return anyhow!("{e}").context("parse error");
+		})?;
+
+		return Ok(res);
+	}
+
+	loop {
+		let res = if let Ok(o) = inner(rest) {
+			o
+		} else {
+			break;
+		};
+
+		let len = rest.len() - res.0.len();
+		rest = res.0;
+
+		#[cfg(debug_assertions)]
+		dbg!(&res.1);
+
+		match res.1 {
+			Token::Sequence(_) => {
+				tag_buffer!(buffer, offset, len, "string");
+			}
+			Token::Key(_) => {
+				tag_buffer!(buffer, offset, len, "keycode");
+			}
+			Token::Action(_) => {
+				tag_buffer!(buffer, offset, len, "action");
+			}
+			_ => {}
+			// Token::Unknown(_) => {
+			// 	// tag_buffer!(buffer, offset, len, "invalid_keycode");
+			// 	// error!("unknown token: {unk}");
+			// }
+		}
+		offset += len;
+
+		if rest.is_empty() || rest.chars().all(|c| c.is_whitespace()) {
+			break;
+		}
+	}
 }

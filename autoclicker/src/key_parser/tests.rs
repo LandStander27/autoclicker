@@ -23,8 +23,11 @@ fn test_keyword_parsing() {
 
 #[test]
 fn test_func_parsing() {
-	parse("delay(1, 2)".into()).unwrap();
-	// assert_eq!();
+	assert!(func("delay(1, 2)").is_ok());
+	assert!(parse("delay(1, 2)".into()).is_err());
+	assert!(func("delay(1)").is_ok());
+	assert!(func("press(Space)").is_ok());
+	assert!(parse("not_a_func(Space)".into()).is_err());
 }
 
 #[test]
@@ -35,4 +38,39 @@ fn test_generic_parsing() {
 
 	assert!(parse("Space Tab move delay(2)".into()).is_ok());
 	assert!(parse("Space Tab move dely".into()).is_err());
+}
+
+#[test]
+fn test_number_parsing() {
+	assert!(parse_number("234").is_ok());
+	assert!(parse_number("-234").is_ok());
+	assert!(parse_number("a234").is_err());
+	assert_eq!(parse_number("-23a4"), Ok(("a4", -23)));
+}
+
+#[test]
+fn test_actions_parsing() {
+	let vec = parse("Space Tab \"a\\n \\t \\\\ \\\"test\" delay(2)".into()).unwrap();
+	assert_eq!(vec, [
+		Actions::PressAndRelease("KEY_SPACE".into()),
+		Actions::PressAndRelease("KEY_TAB".into()),
+		Actions::PressAndRelease("KEY_A".into()),
+		Actions::PressAndRelease("KEY_ENTER".into()),
+		Actions::PressAndRelease("KEY_SPACE".into()),
+		Actions::PressAndRelease("KEY_TAB".into()),
+		Actions::PressAndRelease("KEY_SPACE".into()),
+		Actions::PressAndRelease("KEY_BACKSLASH".into()),
+		Actions::PressAndRelease("KEY_SPACE".into()),
+		
+		Actions::Press("KEY_LEFTSHIFT".into()),
+		Actions::Press("KEY_APOSTROPHE".into()),
+		Actions::Release("KEY_LEFTSHIFT".into()),
+		Actions::Release("KEY_APOSTROPHE".into()),
+
+		Actions::PressAndRelease("KEY_T".into()),
+		Actions::PressAndRelease("KEY_E".into()),
+		Actions::PressAndRelease("KEY_S".into()),
+		Actions::PressAndRelease("KEY_T".into()),
+		Actions::Delay(2),
+	]);
 }
