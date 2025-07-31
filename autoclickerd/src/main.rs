@@ -19,6 +19,7 @@ use std::sync::mpsc::{self, Sender, Receiver};
 use anyhow::{anyhow, Context};
 use clap::Parser;
 
+use evdev_rs::enums::EV_KEY;
 #[allow(unused)]
 use tracing::{debug, warn, error, info, trace, Level};
 
@@ -128,7 +129,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 
 	let mut current_action: usize = 0;
 	let mut last_repeat = std::time::Instant::now();
-	let mut is_holding: bool = false;
+	let mut held_keys: Vec<EV_KEY> = Vec::new();
+	let mut in_press_and_release = false;
 	let mut delay_ms: Option<i64> = None;
 
 	let daemon_settings = settings().lock().unwrap().daemon.clone();
@@ -156,7 +158,18 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 		}
 
 		match last_message {
-			Message::StopClicking(_) => {}
+			Message::StopClicking(_) => {
+				if !held_keys.is_empty() {
+					trace!(msg = "released keys implicitly", key = ?held_keys);
+				}
+
+				for key in &held_keys {
+					keyboard.as_ref().unwrap().release_keyboard_button(*key)?;
+				}
+				held_keys.clear();
+				in_press_and_release = false;
+				delay_ms = None;
+			}
 			Message::RepeatingMouseClick(ref click) => {
 				if click.amount != 0 && amount_clicked >= click.amount as u128 {
 					continue;
@@ -189,11 +202,14 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 					continue;
 				}
 
-				if is_holding && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
+				if in_press_and_release && last_click.elapsed().as_millis() >= click.hold_duration as u128 {
 					if let Actions::PressAndRelease(action) = &click.buttons[current_action] {
-						keyboard.as_ref().unwrap().release_keyboard_button(action.parse().unwrap())?;
+						let key = action.parse().unwrap();
+						keyboard.as_ref().unwrap().release_keyboard_button(key)?;
+						let pos = held_keys.iter().position(|&x| x == key);
+						held_keys.swap_remove(pos.unwrap());
 					}
-					is_holding = false;
+					in_press_and_release = false;
 					current_action += 1;
 					if current_action == click.buttons.len() {
 						last_repeat = std::time::Instant::now();
@@ -201,6 +217,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 						current_action = 0;
 					}
 					last_click = std::time::Instant::now();
+					continue;
+				} else if in_press_and_release {
 					continue;
 				}
 
@@ -216,7 +234,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 						Actions::PressAndRelease(action) => {
 							if let Ok(key) =  action.parse() {
 								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
-								is_holding = true;
+								held_keys.push(key);
+								in_press_and_release = true;
 							} else {
 								warn!("invalid keycode: {action}");
 								continue 'outer;
@@ -224,7 +243,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 						}
 						Actions::Press(key) => {
 							if let Ok(key) =  key.parse() {
-								keyboard.as_ref().unwrap().press_keyboard_button(key)?
+								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
+								held_keys.push(key);
 							} else {
 								warn!("invalid keycode: {key}");
 								continue 'outer;
@@ -232,7 +252,9 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 						}
 						Actions::Release(key) => {
 							if let Ok(key) =  key.parse() {
-								keyboard.as_ref().unwrap().release_keyboard_button(key)?
+								keyboard.as_ref().unwrap().release_keyboard_button(key)?;
+								let pos = held_keys.iter().position(|&x| x == key);
+								held_keys.swap_remove(pos.unwrap());
 							} else {
 								warn!("invalid keycode: {key}");
 								continue 'outer;
@@ -244,7 +266,7 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 						// _ => todo!(),
 					}
 
-					if !is_holding {
+					if !in_press_and_release {
 						current_action += 1;
 						if current_action == click.buttons.len() {
 							last_repeat = std::time::Instant::now();
