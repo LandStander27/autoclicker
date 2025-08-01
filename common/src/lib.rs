@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod prelude;
-pub mod config;
+pub mod settings;
 pub mod actions;
 
 pub trait Json<T: for<'de> Deserialize<'de> + Serialize = Self> {

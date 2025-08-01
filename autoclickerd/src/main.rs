@@ -1,23 +1,18 @@
-use std::{
-	io::{
-		Read,
-		Write,
-	},
-	os::unix::net::{
-		UnixListener,
-		UnixStream
-	}, 
-	sync::{
-		atomic::{
-			AtomicBool,
-			Ordering
-		},
-		Arc, Mutex, OnceLock
-	}
-};
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::{Arc, Mutex, OnceLock};
 use anyhow::{anyhow, Context};
 use clap::Parser;
+use tokio::{
+	net::{UnixListener, UnixStream},
+	signal::unix::{signal, SignalKind},
+	sync::{
+		mpsc::{self, Sender, Receiver},
+		Notify,
+	},
+	io::{
+		AsyncReadExt,
+		AsyncWriteExt,
+	}
+};
 
 use evdev_rs::enums::EV_KEY;
 #[allow(unused)]
@@ -39,14 +34,9 @@ use vmouse::*;
 use vkeyboard::*;
 use common::prelude::*;
 
-#[inline]
-fn sleepms(ms: u64) {
-	std::thread::sleep(std::time::Duration::from_millis(ms));
-}
-
-fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Result<()> {
+async fn handle_stream(stream: &mut UnixStream, tx: &Sender<Message>) -> anyhow::Result<()> {
 	let mut msg = String::new();
-	stream.read_to_string(&mut msg).context("failed to read stream")?;
+	stream.read_to_string(&mut msg).await.context("failed to read stream")?;
 
 	let req = Message::decode(msg)?;
 	trace!(?req);
@@ -79,15 +69,15 @@ fn handle_stream(mut stream: &UnixStream, tx: &Sender<Message>) -> anyhow::Resul
 		}
 	}
 	
-	tx.send(req).context("could not send event over channel")?;
+	tx.send(req).await.context("could not send event over channel")?;
 	return Ok(());
 }
 
-fn settings() -> Arc<Mutex<config::Settings>> {
-	static SETTINGS: OnceLock<Arc<Mutex<config::Settings>>> = OnceLock::new();
+fn settings() -> Arc<Mutex<settings::Settings>> {
+	static SETTINGS: OnceLock<Arc<Mutex<settings::Settings>>> = OnceLock::new();
 	if SETTINGS.get().is_none() {
 		info!("loading config");
-		let conf = match config::load() {
+		let conf = match settings::load() {
 			Ok(o) => o,
 			Err(e) => {
 				tracing::error!("could not get settings: {e}");
@@ -104,7 +94,11 @@ fn socket_file() -> String {
 	let arc = settings();
 	let settings = arc.lock().unwrap();
 	let path = &settings.general.socket_path;
-	return path.replace("$id", id.to_string().as_str());
+	if path.is_none() {
+		error!("socket_path must be supplied when communication_method = UnixSocket");
+		std::process::exit(1);
+	}
+	return path.as_ref().unwrap().replace("$id", id.to_string().as_str());
 }
 
 fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
@@ -122,7 +116,7 @@ fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
 #[allow(non_upper_case_globals)]
 const recv_timeout: std::time::Duration = std::time::Duration::from_millis(5);
 
-fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mouse>, keyboard: Option<Keyboard>) -> anyhow::Result<()> {
+async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Option<Mouse>, keyboard: Option<Keyboard>) -> anyhow::Result<()> {
 	let mut last_message = Message::StopClicking(StopClicking {});
 	let mut last_click = std::time::Instant::now();
 	let mut amount_clicked: u128 = 0;
@@ -135,26 +129,21 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 
 	let daemon_settings = settings().lock().unwrap().daemon.clone();
 	'outer: loop {
-		if exiting.load(Ordering::Relaxed) {
-			break;
-		}
-
-		match rx.recv_timeout(recv_timeout) {
-			Ok(msg) => {
-				trace!("got msg from channel");
-				last_click = std::time::Instant::now();
-				amount_clicked = 0;
-				last_message = msg;
-				if let Message::RepeatingKeyboardClick(_) = last_message {
-					current_action = 0;
+		tokio::select! {
+			biased;
+			_ = exiting.notified() => break,
+			msg = rx.recv() => {
+				if let Some(msg) = msg {
+					trace!("got msg from channel");
+					last_click = std::time::Instant::now();
+					amount_clicked = 0;
+					last_message = msg;
+					if let Message::RepeatingKeyboardClick(_) = last_message {
+						current_action = 0;
+					}
 				}
 			}
-
-			Err(e) => {
-				if e != mpsc::RecvTimeoutError::Timeout {
-					panic!("recv_error: {e}");
-				}
-			}
+			_ = tokio::time::sleep(recv_timeout) => {}
 		}
 
 		match last_message {
@@ -284,7 +273,8 @@ fn bg_thread(exiting: Arc<AtomicBool>, rx: Receiver<Message>, mouse: Option<Mous
 	return Ok(());
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
 	let args = Args::parse();
 	
 	let subscriber = tracing_subscriber::fmt()
@@ -300,10 +290,8 @@ fn main() -> anyhow::Result<()> {
 
 	trace!("registered logger");
 	trace!("registering signal hooks");
-	let hup = Arc::new(AtomicBool::new(false));
-	let int = Arc::new(AtomicBool::new(false));
-	signal_hook::flag::register(signal_hook::consts::SIGHUP, hup.clone()).context("could not register SIGHUP hook")?;
-	signal_hook::flag::register(signal_hook::consts::SIGINT, int.clone()).context("could not register SIGINT hook")?;
+	let mut int = signal(SignalKind::interrupt()).unwrap();
+	let mut hup = signal(SignalKind::hangup()).unwrap();
 
 	let mouse = if !settings().lock().unwrap().daemon.mouse.disabled {
 		trace!("creating virtual mouse");
@@ -326,74 +314,63 @@ fn main() -> anyhow::Result<()> {
 		std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("")))?;
 		UnixListener::bind(path).context("could not create socket")?
 	};
-	listener.set_nonblocking(true).context("could not set socket as nonblocking")?;
 	trace!("binded");
 	info!("listening");
 
-	let (tx, rx) = mpsc::channel::<Message>();
-	let exiting = Arc::new(AtomicBool::new(false));
+	let (tx, mut rx) = mpsc::channel::<Message>(64);
+	let exiting = Arc::new(Notify::new());
 	let clone = exiting.clone();
-	let thread = std::thread::spawn(move || {
+	let thread = tokio::spawn(async move {
 		if !settings().lock().unwrap().daemon.dry_run {
-			if let Err(e) = bg_thread(clone, rx, mouse, keyboard) {
+			if let Err(e) = bg_thread(clone, rx, mouse, keyboard).await {
 				error!("from bg_thread: {e}");
 			}
 		} else {
 			info!("dry run");
 			loop {
-				if clone.load(Ordering::Relaxed) {
-					break;
+				tokio::select! {
+					biased;
+					_ = clone.notified() => break,
+					_ = rx.recv() => trace!("got msg from channel"),
+					_ = tokio::time::sleep(std::time::Duration::from_millis(25)) => {}
 				}
-				
-				match rx.recv_timeout(recv_timeout) {
-					Ok(_) => {
-						trace!("got msg from channel");
-					}
-
-					Err(e) => {
-						if e != mpsc::RecvTimeoutError::Timeout {
-							panic!("recv_error: {e}");
-						}
-					}
-				}
-				
-				sleepms(25);
 			}
 		}
 	});
-
-	loop {
-		if hup.load(Ordering::Relaxed) || int.load(Ordering::Relaxed) {
-			if int.load(Ordering::Relaxed) {
-				println!();
-			}
-			info!("gracefully shutting down");
-			break;
+	
+	let func = async |mut stream: UnixStream, tx: Sender<Message>| -> anyhow::Result<()> {
+		if let Err(e) = handle_stream(&mut stream, &tx).await {
+			let message = Message::Error(ErrorResponse {
+				msg: e.to_string(),
+			});
+			
+			let json = Message::encode(&message)?;
+			stream.write_all(json.as_bytes()).await.context("could not write to stream")?;
+		} else {
+			let message = Message::ConfirmResponse(ConfirmResponse {});
+			let json = Message::encode(&message)?;
+			stream.write_all(json.as_bytes()).await.context("could not write to stream")?;
 		}
 
-		let res = listener.accept();
-		match res {
-			Ok((mut stream, _addr)) => {
-				if let Err(e) = handle_stream(&stream, &tx) {
-					let message = Message::Error(ErrorResponse {
-						msg: e.to_string(),
-					});
-					
-					let json = Message::encode(&message)?;
-					stream.write(json.as_bytes()).context("could not write to stream")?;
-				} else {
-					let message = Message::ConfirmResponse(ConfirmResponse {});
-					let json = Message::encode(&message)?;
-					stream.write(json.as_bytes()).context("could not write to stream")?;
-				}
-			}
+		return Ok(());
+	};
 
-			Err(ref e) => {
-				if e.kind() == std::io::ErrorKind::WouldBlock {
-					sleepms(25);
-					continue;
-				}
-				res.context("failed at accepting connection on socket")?;
+	loop {
+		let int = int.recv();
+		let hup = hup.recv();
+		tokio::select! {
+			_ = int => {
+				println!();
+				info!("gracefully shutting down");
+				break;
+			}
+			_ = hup => {
+				info!("gracefully shutting down");
+				break;
+			}
+			Ok((stream, _)) = listener.accept() => {
+				let tx = tx.clone();
+				tokio::spawn(func(stream, tx));
 			}
 		}
 	}
@@ -402,8 +379,8 @@ fn main() -> anyhow::Result<()> {
 	std::fs::remove_file(socket_file()).context("could not delete socket")?;
 	trace!("deleted socket");
 
-	exiting.store(true, Ordering::Relaxed);
-	thread.join().unwrap();
+	exiting.notify_waiters();
+	thread.await.unwrap();
 	
 	return Ok(());
 }

@@ -1,10 +1,4 @@
 use serde::{Deserialize, Serialize};
-use anyhow::Context;
-
-#[derive(Default, Serialize, Deserialize)]
-struct SettingsV1 {
-	pub disable_window_controls: bool,
-}
 
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct ClientSettings {
@@ -61,41 +55,8 @@ mod daemon {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
-pub struct SettingsV2 {
+pub struct Settings {
 	pub general: GeneralSettings,
 	pub client: ClientSettings,
 	pub daemon: daemon::DaemonSettings,
-}
-
-impl From<SettingsV1> for SettingsV2 {
-	fn from(old: SettingsV1) -> Self {
-		return Self {
-			client: ClientSettings {
-				disable_window_controls: old.disable_window_controls,
-			},
-			..Default::default()
-		};
-	}
-}
-
-pub type Settings = SettingsV2;
-
-pub fn load() -> anyhow::Result<Settings> {
-	let path = confy::get_configuration_file_path("dev.land.Autoclicker", Some("config")).context("could not get config file path")?;
-	let config: Settings = confy::load_or_else(path.clone(), move || {
-		let old: SettingsV1 = match confy::load_or_else(path, || {
-			return SettingsV1::default();
-		}) {
-			Ok(o) => o,
-			Err(_e) => return Settings::default(),
-		};
-
-		return Settings::from(old);
-	}).context("could not load config file")?;
-	
-	return Ok(config);
-}
-
-pub fn save(settings: &Settings) -> anyhow::Result<()> {
-	return confy::store("dev.land.Autoclicker", Some("config"), settings).context("could not store config");
 }
