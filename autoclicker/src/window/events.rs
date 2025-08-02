@@ -1,20 +1,11 @@
-use anyhow::{anyhow, Context};
-use gtk4::{
-	self as gtk, Button
-};
+use anyhow::{Context, anyhow};
 use gtk::prelude::*;
-use gtk::{
-	ApplicationWindow,
-	glib,
-};
+use gtk::{ApplicationWindow, glib};
+use gtk4::{self as gtk, Button};
 
 use std::sync::{Arc, Mutex};
 
-use super::{
-	Config,
-	Screen,
-	dialogs,
-};
+use super::{Config, Screen, dialogs};
 
 use crate::socket;
 use crate::unix;
@@ -22,15 +13,17 @@ use crate::unix;
 pub async fn get_coords() -> anyhow::Result<(i32, i32)> {
 	let output = tokio::process::Command::new("/usr/bin/slurp")
 		.args(["-b", "#00000000", "-p", "-f", "%x %y"])
-		.output().await.context("could not run '/usr/bin/slurp'")?;
+		.output()
+		.await
+		.context("could not run '/usr/bin/slurp'")?;
 
 	if !output.status.success() {
 		return Err(anyhow!("slurp failed, code: {}", output.status));
 	}
-	
+
 	let output = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
 	tracing::debug!(slurp_output = output);
-	
+
 	let pos: Vec<&str> = output.split(" ").collect();
 	if pos.len() != 2 {
 		return Err(anyhow!("invalid slurp output"));
@@ -87,15 +80,15 @@ fn start_mouse(window: &ApplicationWindow, button: &Button, config: Arc<Mutex<Co
 			glib::MainContext::default().spawn_local(dialogs::service_dialog(window.clone()));
 			return false;
 		}
-		
+
 		if let Err(e) = socket::send_mouse_request(&config.lock().unwrap().mouse) {
 			gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: socket::send_mouse_request", e.to_string()));
 			return false;
 		}
-		
+
 		return true;
 	}
-	
+
 	if !status(window, config) {
 		return;
 	}
@@ -128,15 +121,15 @@ fn start_keyboard(window: &ApplicationWindow, button: &Button, config: Arc<Mutex
 			glib::MainContext::default().spawn_local(dialogs::service_dialog(window.clone()));
 			return false;
 		}
-		
+
 		if let Err(e) = socket::send_keyboard_request(&config.lock().unwrap().keyboard) {
 			gtk::glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: socket::send_keybord_request", e.to_string()));
 			return false;
 		}
-		
+
 		return true;
 	}
-	
+
 	if !status(window, config) {
 		return;
 	}

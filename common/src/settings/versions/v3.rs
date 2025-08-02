@@ -5,7 +5,7 @@ pub struct ClientSettings {
 	pub disable_window_controls: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum Methods {
 	DBus,
 	UnixSocket,
@@ -20,7 +20,7 @@ pub struct GeneralSettings {
 impl Default for GeneralSettings {
 	fn default() -> Self {
 		return Self {
-			socket_path: None,
+			socket_path: Some("/run/user/$id/autoclicker.socket".into()),
 			communication_method: Methods::DBus,
 		};
 	}

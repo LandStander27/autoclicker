@@ -1,9 +1,10 @@
 use anyhow::Context;
 
 mod versions;
-use versions::*;
+pub use versions::*;
 
 pub type Settings = v3::Settings;
+pub use v3 as latest;
 
 macro_rules! generate_trait {
 	($($version:tt),* $(,)?) => {
@@ -35,7 +36,7 @@ macro_rules! generate_migration {
 				return Settings::from(o);
 			}
 		)*
-		
+
 		return Settings::default();
 	};
 }
@@ -50,7 +51,7 @@ macro_rules! generate_whole {
 			let config: Settings = confy::load_or_else(path.clone(), move || {
 				generate_migration!(path, $($version, )*);
 			}).context("could not load config file")?;
-			
+
 			return Ok(config);
 		}
 	};
@@ -67,7 +68,7 @@ impl Latest for Settings {
 			..Default::default()
 		};
 	}
-	
+
 	fn v2(old: v2::Settings) -> Self {
 		return Self {
 			general: v3::GeneralSettings {

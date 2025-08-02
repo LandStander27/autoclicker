@@ -1,22 +1,20 @@
 use nom::{
+	IResult, Offset, Parser,
 	branch::alt,
 	bytes::complete::{tag, take_while1},
 	character::complete::{alpha1, alphanumeric1, char, multispace0, one_of},
-	combinator::{map, recognize, opt, cut},
+	combinator::{cut, map, opt, recognize},
+	error::{ParseError, context},
 	multi::{many0, many1, separated_list0},
 	sequence::{delimited, pair, preceded, terminated},
-	IResult,
-	Parser,
-	error::{context, ParseError},
-	Offset,
 };
 use nom_language::error::{VerboseError, VerboseErrorKind};
 
-use common::prelude::*;
-use tracing::{error, info};
-use anyhow::anyhow;
-use std::fmt::Write;
 use crate::keycodes;
+use anyhow::anyhow;
+use common::prelude::*;
+use std::fmt::Write;
+use tracing::{error, info};
 
 pub mod strings;
 mod tests;
@@ -38,26 +36,20 @@ enum Token<'a> {
 }
 
 fn parse_ident(input: &str) -> ParseResult<&str, String> {
-	let res = recognize(pair(
-		alt((alpha1, tag("_"))),
-		many0(alt((alphanumeric1, tag("_"))))
-	)).parse(input)?;
-	
+	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
+
 	return Ok((res.0, res.1.into()));
 }
 
 fn parse_number(input: &str) -> ParseResult<&str, i64> {
-	let res = recognize(
-		preceded(opt(char('-')), many1(
-			terminated(one_of("0123456789"), many0(char('_')))
-		))
-	).parse(input)?;
+	let res = recognize(preceded(opt(char('-')), many1(terminated(one_of("0123456789"), many0(char('_')))))).parse(input)?;
 
 	let num: i64 = match res.1.parse() {
 		Ok(o) => o,
 		Err(_) => {
 			let mut err = VerboseError::from_error_kind(res.1, nom::error::ErrorKind::Fail);
-			err.errors.push((res.1, VerboseErrorKind::Context("invalid i64")));
+			err.errors
+				.push((res.1, VerboseErrorKind::Context("invalid i64")));
 			return Err(nom::Err::Error(err));
 		}
 	};
@@ -66,64 +58,55 @@ fn parse_number(input: &str) -> ParseResult<&str, i64> {
 }
 
 fn func(input: &str) -> ParseResult<&str, (String, Vec<Literal>)> {
-	let res = recognize(pair(
-		alt((alpha1, tag("_"))),
-		many0(alt((alphanumeric1, tag("_"))))
-	)).parse(input)?;
-	
+	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
+
 	let ident = res.1;
 	if !["press", "release", "delay"].contains(&ident) {
 		let mut err = VerboseError::from_error_kind(res.1, nom::error::ErrorKind::Fail);
-		err.errors.push((res.1, VerboseErrorKind::Context("unknown function")));
+		err.errors
+			.push((res.1, VerboseErrorKind::Context("unknown function")));
 		return Err(nom::Err::Error(err));
 	}
 
 	let res = cut(delimited(
 		context("expected (", char('(')),
-		separated_list0(char(','), delimited(
-			multispace0,
-			alt((
-				map(parse_ident, Literal::String),
-				map(parse_number, Literal::Number),
-			)),
-			multispace0
-		)),
-		context("expected ')'", char(')'))
-	)).parse(res.0)?;
+		separated_list0(
+			char(','),
+			delimited(multispace0, alt((map(parse_ident, Literal::String), map(parse_number, Literal::Number))), multispace0),
+		),
+		context("expected ')'", char(')')),
+	))
+	.parse(res.0)?;
 
-	return Ok((
-		res.0,
-		(ident.to_string(), res.1),
-	));
+	return Ok((res.0, (ident.to_string(), res.1)));
 }
 
 fn key(input: &str) -> ParseResult<&str, String> {
-	let res = recognize(pair(
-		alt((alpha1, tag("_"))),
-		many0(alt((alphanumeric1, tag("_"))))
-	)).parse(input)?;
+	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
 
 	if keycodes::key_exists(res.1) {
 		return Ok((res.0, res.1.into()));
 	}
-	
+
 	let mut err = VerboseError::from_error_kind(res.1, nom::error::ErrorKind::Fail);
-	err.errors.push((res.1, VerboseErrorKind::Context("unknown key")));
+	err.errors
+		.push((res.1, VerboseErrorKind::Context("unknown key")));
 	return Err(nom::Err::Error(err));
 }
 
 fn convert_error(input: &String, err: VerboseError<&str>) -> String {
 	let mut result = String::new();
-	
+
 	for (substring, kind) in err.errors.iter() {
 		let offset = input.offset(substring);
-		
+
 		if input.is_empty() {
 			match kind {
 				VerboseErrorKind::Char(c) => write!(&mut result, "error: expected '{c}', got empty input\n\n"),
 				VerboseErrorKind::Context(ctx) => write!(&mut result, "error: in {ctx}, got empty input\n\n"),
 				VerboseErrorKind::Nom(e) => write!(&mut result, "error: in {e:?}, got empty input\n\n"),
-			}.unwrap();
+			}
+			.unwrap();
 
 			continue;
 		}
@@ -137,43 +120,43 @@ fn convert_error(input: &String, err: VerboseError<&str>) -> String {
 			.position(|&b| b == b'\n')
 			.map(|pos| offset - pos)
 			.unwrap_or(0);
-		
+
 		let line = input[line_begin..]
 			.lines()
 			.next()
 			.unwrap_or(&input[line_begin..])
 			.trim_end();
-		
+
 		let column_number = line.offset(substring) + 1;
 
 		match kind {
 			VerboseErrorKind::Char(c) => {
 				if let Some(actual) = substring.chars().next() {
-					write!(&mut result, "error: expected '{c}', found {actual}\nline:column {line_number}:{column}\n{line}\n\n", column = column_number)
+					write!(&mut result, "error: expected '{c}', found {actual}\nline:column {line_number}:{column_number}\n{line}\n\n")
 				} else {
-					write!(&mut result, "error: expected '{c}', got end of input\nline:column {line_number}:{column}\n{line}\n\n", column = column_number)
+					write!(&mut result, "error: expected '{c}', got end of input\nline:column {line_number}:{column_number}\n{line}\n\n")
 				}
 			}
 			VerboseErrorKind::Context(ctx) => {
-				write!(&mut result, "error: {ctx}\nline:column {line_number}:{column}\n{line}\n\n", column = column_number)
+				write!(&mut result, "error: {ctx}\nline:column {line_number}:{column_number}\n{line}\n\n")
 			}
 			VerboseErrorKind::Nom(err) => {
-				write!(&mut result, "error: {err:?}\nline:column {line_number}:{column}\n{line}\n\n", column = column_number)
-			}
-			// VerboseErrorKind::Char(c) => {
-			// 	if let Some(actual) = substring.chars().next() {
-			// 		write!(&mut result, "error: expected '{c}', found {actual}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
-			// 	} else {
-			// 		write!(&mut result, "error: expected '{c}', got end of input\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
-			// 	}
-			// }
-			// VerboseErrorKind::Context(ctx) => {
-			// 	write!(&mut result, "error: {ctx}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
-			// }
-			// VerboseErrorKind::Nom(err) => {
-			// 	write!(&mut result, "error: {err:?}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
-			// }
-		}.unwrap();
+				write!(&mut result, "error: {err:?}\nline:column {line_number}:{column_number}\n{line}\n\n")
+			} // VerboseErrorKind::Char(c) => {
+			  // 	if let Some(actual) = substring.chars().next() {
+			  // 		write!(&mut result, "error: expected '{c}', found {actual}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
+			  // 	} else {
+			  // 		write!(&mut result, "error: expected '{c}', got end of input\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
+			  // 	}
+			  // }
+			  // VerboseErrorKind::Context(ctx) => {
+			  // 	write!(&mut result, "error: {ctx}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
+			  // }
+			  // VerboseErrorKind::Nom(err) => {
+			  // 	write!(&mut result, "error: {err:?}\n   --> line {line_number}\n     {line}\n{caret:>column$}\n\n", caret = "^", column = column_number + 5)
+			  // }
+		}
+		.unwrap();
 	}
 
 	return result;
@@ -190,12 +173,17 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 	let mut actions: Vec<Actions> = Vec::new();
 
 	loop {
-		let res = preceded(multispace0, alt((
-			map(strings::parse_string, Token::Sequence),
-			map(func, Token::Action),
-			map(key, Token::Key),
-			map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
-		))).parse(rest).map_err(|e| {
+		let res = preceded(
+			multispace0,
+			alt((
+				map(strings::parse_string, Token::Sequence),
+				map(func, Token::Action),
+				map(key, Token::Key),
+				map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
+			)),
+		)
+		.parse(rest)
+		.map_err(|e| {
 			match e {
 				nom::Err::Error(ref e) | nom::Err::Failure(ref e) => {
 					let s = convert_error(&input, e.clone());
@@ -255,33 +243,35 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 				}
 
 				for c in seq.chars() {
-					generate_match!(c, [
-						("MINUS", '-', '_'),
-						("EQUAL", '=', '+'),
-						("TAB", '\t'),
-						("LEFTBRACE", '[', '{'),
-						("RIGHTBRACE", ']', '}'),
-						("ENTER", '\n'),
-						("SEMICOLON", ';', ':'),
-						("APOSTROPHE", '\'', '\"'),
-						("GRAVE", '`', '~'),
-						("BACKSLASH", '\\', '|'),
-						("COMMA", ',', '<'),
-						("DOT", '.', '>'),
-						("SLASH", '/', '?'),
-						("SPACE", ' '),
-						
-						("1", '\0', '!'),
-						("2", '\0', '@'),
-						("3", '\0', '#'),
-						("4", '\0', '$'),
-						("5", '\0', '%'),
-						("6", '\0', '^'),
-						("7", '\0', '&'),
-						("8", '\0', '*'),
-						("9", '\0', '('),
-						("0", '\0', ')')
-					]);
+					generate_match!(
+						c,
+						[
+							("MINUS", '-', '_'),
+							("EQUAL", '=', '+'),
+							("TAB", '\t'),
+							("LEFTBRACE", '[', '{'),
+							("RIGHTBRACE", ']', '}'),
+							("ENTER", '\n'),
+							("SEMICOLON", ';', ':'),
+							("APOSTROPHE", '\'', '\"'),
+							("GRAVE", '`', '~'),
+							("BACKSLASH", '\\', '|'),
+							("COMMA", ',', '<'),
+							("DOT", '.', '>'),
+							("SLASH", '/', '?'),
+							("SPACE", ' '),
+							("1", '\0', '!'),
+							("2", '\0', '@'),
+							("3", '\0', '#'),
+							("4", '\0', '$'),
+							("5", '\0', '%'),
+							("6", '\0', '^'),
+							("7", '\0', '&'),
+							("8", '\0', '*'),
+							("9", '\0', '('),
+							("0", '\0', ')')
+						]
+					);
 				}
 			}
 			Token::Key(kw) => {
@@ -293,42 +283,36 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 			Token::Action(action) => {
 				let args = action.1;
 				match action.0.as_str() {
-					"delay" => {
-						match args.as_slice() {
-							[Literal::Number(num)] => {
-								actions.push(Actions::Delay(*num));
-							}
-							_ => return Err(anyhow!("delay is defined as: `delay(number)`"))
+					"delay" => match args.as_slice() {
+						[Literal::Number(num)] => {
+							actions.push(Actions::Delay(*num));
 						}
-					}
-					"press" => {
-						match args.as_slice() {
-							[Literal::String(key)] => {
-								if !keycodes::key_exists(key) {
-									return Err(anyhow!("invalid key: {key}"));
-								}
-								let mut s = String::new();
-								s.push_str("KEY_");
-								s.push_str(&key.to_uppercase());
-								actions.push(Actions::Press(s));
+						_ => return Err(anyhow!("delay is defined as: `delay(number)`")),
+					},
+					"press" => match args.as_slice() {
+						[Literal::String(key)] => {
+							if !keycodes::key_exists(key) {
+								return Err(anyhow!("invalid key: {key}"));
 							}
-							_ => return Err(anyhow!("press is defined as: `press(key)`"))
+							let mut s = String::new();
+							s.push_str("KEY_");
+							s.push_str(&key.to_uppercase());
+							actions.push(Actions::Press(s));
 						}
-					}
-					"release" => {
-						match args.as_slice() {
-							[Literal::String(key)] => {
-								if !keycodes::key_exists(key) {
-									return Err(anyhow!("invalid key: {key}"));
-								}
-								let mut s = String::new();
-								s.push_str("KEY_");
-								s.push_str(&key.to_uppercase());
-								actions.push(Actions::Release(s));
+						_ => return Err(anyhow!("press is defined as: `press(key)`")),
+					},
+					"release" => match args.as_slice() {
+						[Literal::String(key)] => {
+							if !keycodes::key_exists(key) {
+								return Err(anyhow!("invalid key: {key}"));
 							}
-							_ => return Err(anyhow!("release is defined as: `release(key)`"))
+							let mut s = String::new();
+							s.push_str("KEY_");
+							s.push_str(&key.to_uppercase());
+							actions.push(Actions::Release(s));
 						}
-					}
+						_ => return Err(anyhow!("release is defined as: `release(key)`")),
+					},
 					_ => unreachable!(),
 				}
 			}
@@ -338,7 +322,7 @@ pub(crate) fn parse(input: String) -> anyhow::Result<Vec<Actions>> {
 			break;
 		}
 	}
-	
+
 	info!("parsing done; took {}ms", start.elapsed().as_millis());
 	return Ok(actions);
 }
@@ -354,21 +338,28 @@ macro_rules! tag_buffer {
 }
 
 pub(crate) fn syntax_highlighting(buffer: &gtk4::TextBuffer) {
-	use gtk4 as gtk;
 	use gtk::prelude::*;
-	
+	use gtk4 as gtk;
+
 	buffer.remove_all_tags(&buffer.start_iter(), &buffer.end_iter());
-	let input = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+	let input = buffer
+		.text(&buffer.start_iter(), &buffer.end_iter(), true)
+		.to_string();
 	let mut offset: usize = 0;
 	let mut rest: &str = input.as_str();
 
 	fn inner(rest: &str) -> anyhow::Result<(&str, Token)> {
-		let res = preceded(multispace0, alt((
-			map(strings::parse_string, Token::Sequence),
-			map(func, Token::Action),
-			map(key, Token::Key),
-			map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
-		))).parse(rest).map_err(|e| {
+		let res = preceded(
+			multispace0,
+			alt((
+				map(strings::parse_string, Token::Sequence),
+				map(func, Token::Action),
+				map(key, Token::Key),
+				map(take_while1(|c: char| !c.is_whitespace()), Token::Unknown),
+			)),
+		)
+		.parse(rest)
+		.map_err(|e| {
 			error!(?e);
 			return anyhow!("{e}").context("parse error");
 		})?;
@@ -400,10 +391,6 @@ pub(crate) fn syntax_highlighting(buffer: &gtk4::TextBuffer) {
 				tag_buffer!(buffer, offset, len, "action");
 			}
 			_ => {}
-			// Token::Unknown(_) => {
-			// 	// tag_buffer!(buffer, offset, len, "invalid_keycode");
-			// 	// error!("unknown token: {unk}");
-			// }
 		}
 		offset += len;
 

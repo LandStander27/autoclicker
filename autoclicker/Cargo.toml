@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 gtk4 = { version = "0.9.6", features = [ "v4_10" ] }
 libadwaita = { version = "0.7.2", features = [ "v1_5" ]}
-tokio = { version = "1.47.0", features = [ "rt", "rt-multi-thread", "process" ] }
 async-channel = "2.5.0"
 ashpd = { version = "0.11.0", default-features = false, features = [ "gtk4", "async-std" ]}
 futures-util = "0.3.31"
@@ -19,6 +18,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
 nix.workspace = true
+tokio.workspace = true
 
 version.workspace = true
 common.workspace = true

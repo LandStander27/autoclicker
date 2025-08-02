@@ -13,7 +13,7 @@ pub struct GeneralSettings {
 impl Default for GeneralSettings {
 	fn default() -> Self {
 		return Self {
-			socket_path: "/run/user/$id/autoclicker.socket".into()
+			socket_path: "/run/user/$id/autoclicker.socket".into(),
 		};
 	}
 }
@@ -26,7 +26,7 @@ mod daemon {
 		pub disabled: bool,
 		pub added_delay: u64,
 	}
-	
+
 	#[derive(Default, Serialize, Deserialize, Clone)]
 	pub struct MouseSettings {
 		pub disabled: bool,
@@ -41,7 +41,7 @@ mod daemon {
 		pub mouse: MouseSettings,
 		pub keyboard: KeyboardSettings,
 	}
-	
+
 	impl Default for DaemonSettings {
 		fn default() -> Self {
 			return Self {

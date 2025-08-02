@@ -1,5 +1,5 @@
 use anyhow::Context;
-use evdev_rs::enums::{BusType, EventCode, EV_KEY, EV_REL, EV_SYN};
+use evdev_rs::enums::{BusType, EV_KEY, EV_REL, EV_SYN, EventCode};
 use evdev_rs::{DeviceWrapper, UInputDevice, UninitDevice};
 
 use crate::vdevice::*;
@@ -13,7 +13,7 @@ pub enum MouseButton {
 #[allow(unused)]
 pub struct Mouse {
 	mouse: UninitDevice,
-	input: UInputDevice
+	input: UInputDevice,
 }
 
 impl Mouse {
@@ -23,24 +23,33 @@ impl Mouse {
 		mouse.set_bustype(BusType::BUS_USB as u16);
 		mouse.set_vendor_id(0xabcd);
 		mouse.set_product_id(0xefef);
-		
-		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_LEFT)).context("could not enable left mouse key")?;
-		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE)).context("could not enable middle mouse key")?;
-		mouse.enable(EventCode::EV_KEY(EV_KEY::BTN_RIGHT)).context("could not enable right mouse key")?;
-		
-		mouse.enable(EventCode::EV_REL(EV_REL::REL_X)).context("could not enable rel_x")?;
-		mouse.enable(EventCode::EV_REL(EV_REL::REL_Y)).context("could not enable rel_y")?;
-		
-		mouse.enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT)).context("could not enable SYN_REPORT")?;
-		
+
+		mouse
+			.enable(EventCode::EV_KEY(EV_KEY::BTN_LEFT))
+			.context("could not enable left mouse key")?;
+		mouse
+			.enable(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE))
+			.context("could not enable middle mouse key")?;
+		mouse
+			.enable(EventCode::EV_KEY(EV_KEY::BTN_RIGHT))
+			.context("could not enable right mouse key")?;
+
+		mouse
+			.enable(EventCode::EV_REL(EV_REL::REL_X))
+			.context("could not enable rel_x")?;
+		mouse
+			.enable(EventCode::EV_REL(EV_REL::REL_Y))
+			.context("could not enable rel_y")?;
+
+		mouse
+			.enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT))
+			.context("could not enable SYN_REPORT")?;
+
 		let input = UInputDevice::create_from_device(&mouse).context("could not create input device")?;
-		
-		return Ok(Self {
-			mouse,
-			input,
-		});
+
+		return Ok(Self { mouse, input });
 	}
-	
+
 	#[inline]
 	pub fn move_mouse_relative(&self, x: Option<i32>, y: Option<i32>) -> anyhow::Result<()> {
 		if let Some(x) = x {
@@ -50,7 +59,7 @@ impl Mouse {
 			self.send_event(EventCode::EV_REL(EV_REL::REL_Y), y)?;
 		}
 		self.send_sync()?;
-		
+
 		return Ok(());
 	}
 
@@ -68,23 +77,23 @@ impl Mouse {
 			MouseButton::Left => {
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_LEFT), 1)?;
 				self.send_sync()?;
-				
+
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_LEFT), 0)?;
 				self.send_sync()?;
 			}
-			
+
 			MouseButton::Right => {
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_RIGHT), 1)?;
 				self.send_sync()?;
-				
+
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_RIGHT), 0)?;
 				self.send_sync()?;
 			}
-			
+
 			MouseButton::Middle => {
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE), 1)?;
 				self.send_sync()?;
-				
+
 				self.send_event(EventCode::EV_KEY(EV_KEY::BTN_MIDDLE), 0)?;
 				self.send_sync()?;
 			}

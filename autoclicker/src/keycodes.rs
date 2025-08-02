@@ -509,6 +509,6 @@ pub fn key_exists(key: &str) -> bool {
 		"KBD_LCD_MENU3" => true,
 		"KBD_LCD_MENU4" => true,
 		"KBD_LCD_MENU" => true,
-		_ => false
+		_ => false,
 	};
 }

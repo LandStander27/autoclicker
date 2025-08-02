@@ -1,14 +1,15 @@
 #[allow(unused)]
-use tracing::{debug, warn, error, info, trace, Level};
+use tracing::{Level, debug, error, info, trace, warn};
 
 mod window;
 use window::*;
 
+mod dbus;
+mod key_parser;
+mod keycodes;
+mod shortcuts;
 mod socket;
 mod unix;
-mod shortcuts;
-mod keycodes;
-mod key_parser;
 
 fn enable_logger() {
 	let subscriber = tracing_subscriber::fmt()
@@ -17,7 +18,11 @@ fn enable_logger() {
 		.with_line_number(false)
 		.with_thread_ids(true)
 		.with_target(true)
-		.with_max_level(if cfg!(debug_assertions) { Level::TRACE } else { Level::DEBUG })
+		.with_max_level(if cfg!(debug_assertions) {
+			Level::TRACE
+		} else {
+			Level::DEBUG
+		})
 		.without_time()
 		.finish();
 	tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -27,7 +32,7 @@ fn main() -> anyhow::Result<()> {
 	enable_logger();
 	trace!("registered logger");
 	info!("autoclicker {}", version::version);
-	
+
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
 	window.run();
 

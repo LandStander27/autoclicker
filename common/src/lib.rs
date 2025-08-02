@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+pub mod actions;
 pub mod prelude;
 pub mod settings;
-pub mod actions;
 
 pub trait Json<T: for<'de> Deserialize<'de> + Serialize = Self> {
 	fn decode<S: Into<String>>(json: S) -> Result<T, serde_json::Error> {
 		return serde_json::from_str(&json.into());
 	}
-	
+
 	fn encode(message: &T) -> Result<String, serde_json::Error> {
 		return serde_json::to_string(message);
 	}

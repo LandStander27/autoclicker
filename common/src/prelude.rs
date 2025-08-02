@@ -1,12 +1,1 @@
-pub use crate::{
-	MouseClick,
-	RepeatingMouseClick,
-	RepeatingKeyboardClick,
-	StopClicking,
-	ConfirmResponse,
-	Message,
-	Json,
-	Error as ErrorResponse,
-	settings,
-	actions::Actions,
-};
+pub use crate::{ConfirmResponse, Error as ErrorResponse, Json, Message, MouseClick, RepeatingKeyboardClick, RepeatingMouseClick, StopClicking, actions::Actions, settings};

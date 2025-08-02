@@ -1,22 +1,14 @@
-use std::sync::{Arc, Mutex, OnceLock};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use clap::Parser;
-use tokio::{
-	net::{UnixListener, UnixStream},
-	signal::unix::{signal, SignalKind},
-	sync::{
-		mpsc::{self, Sender, Receiver},
-		Notify,
-	},
-	io::{
-		AsyncReadExt,
-		AsyncWriteExt,
-	}
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::{
+	Notify,
+	mpsc::{self, Receiver},
 };
 
 use evdev_rs::enums::EV_KEY;
 #[allow(unused)]
-use tracing::{debug, warn, error, info, trace, Level};
+use tracing::{Level, debug, error, info, trace, warn};
 
 #[derive(Parser, Debug)]
 #[command(name = "autoclickerd", version = version::version)]
@@ -26,17 +18,19 @@ struct Args {
 	verbose: bool,
 }
 
-mod vdevice;
-mod vmouse;
-mod vkeyboard;
+mod dbus;
 mod hypr;
-use vmouse::*;
-use vkeyboard::*;
+mod socket;
+mod vdevice;
+mod vkeyboard;
+mod vmouse;
 use common::prelude::*;
+use vkeyboard::*;
+use vmouse::*;
 
-async fn handle_stream(stream: &mut UnixStream, tx: &Sender<Message>) -> anyhow::Result<()> {
-	let mut msg = String::new();
-	stream.read_to_string(&mut msg).await.context("failed to read stream")?;
+async fn handle_msg(msg: String) -> anyhow::Result<Message> {
+	// let mut msg = String::new();
+	// stream.read_to_string(&mut msg).await.context("failed to read stream")?;
 
 	let req = Message::decode(msg)?;
 	trace!(?req);
@@ -46,7 +40,7 @@ async fn handle_stream(stream: &mut UnixStream, tx: &Sender<Message>) -> anyhow:
 			if settings().lock().unwrap().daemon.mouse.disabled {
 				return Err(anyhow!("mouse virtualization has been disabled in the configs"));
 			}
-			
+
 			if !["left", "right", "middle"].contains(&event.button.as_str()) {
 				warn!("invalid mouse button");
 				return Err(anyhow!("invalid mouse button"));
@@ -68,9 +62,9 @@ async fn handle_stream(stream: &mut UnixStream, tx: &Sender<Message>) -> anyhow:
 			return Err(anyhow!("invalid request"));
 		}
 	}
-	
-	tx.send(req).await.context("could not send event over channel")?;
-	return Ok(());
+
+	// tx.send(req).await.context("could not send event over channel")?;
+	return Ok(req);
 }
 
 fn settings() -> Arc<Mutex<settings::Settings>> {
@@ -84,32 +78,31 @@ fn settings() -> Arc<Mutex<settings::Settings>> {
 				std::process::exit(1);
 			}
 		};
-		return SETTINGS.get_or_init(move || Arc::new(Mutex::new(conf))).clone();
+		return SETTINGS
+			.get_or_init(move || Arc::new(Mutex::new(conf)))
+			.clone();
 	}
 	return SETTINGS.get().unwrap().clone();
 }
 
-fn socket_file() -> String {
-	let id = nix::unistd::geteuid();
-	let arc = settings();
-	let settings = arc.lock().unwrap();
-	let path = &settings.general.socket_path;
-	if path.is_none() {
-		error!("socket_path must be supplied when communication_method = UnixSocket");
-		std::process::exit(1);
-	}
-	return path.as_ref().unwrap().replace("$id", id.to_string().as_str());
-}
-
 fn do_mouse_click(btn: &String, mouse: &Mouse) -> anyhow::Result<()> {
 	if btn == "left" {
-		mouse.click_mouse_button(MouseButton::Left).context("could not click button").unwrap();
+		mouse
+			.click_mouse_button(MouseButton::Left)
+			.context("could not click button")
+			.unwrap();
 	} else if btn == "right" {
-		mouse.click_mouse_button(MouseButton::Right).context("could not click button").unwrap();
+		mouse
+			.click_mouse_button(MouseButton::Right)
+			.context("could not click button")
+			.unwrap();
 	} else if btn == "middle" {
-		mouse.click_mouse_button(MouseButton::Middle).context("could not click button").unwrap();
+		mouse
+			.click_mouse_button(MouseButton::Middle)
+			.context("could not click button")
+			.unwrap();
 	}
-	
+
 	return Ok(());
 }
 
@@ -163,14 +156,17 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 				if click.amount != 0 && amount_clicked >= click.amount as u128 {
 					continue;
 				}
-				
+
 				if last_click.elapsed().as_millis() >= (click.interval + daemon_settings.mouse.added_delay) as u128 {
 					last_click = std::time::Instant::now();
 					if click.position.0.is_some() || click.position.1.is_some() {
 						if daemon_settings.hyprland_ipc && hypr::is_hyprland() {
 							hypr::move_mouse(mouse.as_ref().unwrap(), click.position.0, click.position.1)?;
 						} else {
-							mouse.as_ref().unwrap().move_mouse(click.position.0, click.position.1)?;
+							mouse
+								.as_ref()
+								.unwrap()
+								.move_mouse(click.position.0, click.position.1)?;
 						}
 					}
 					do_mouse_click(&click.button, mouse.as_ref().unwrap())?;
@@ -178,11 +174,11 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 						std::thread::sleep(std::time::Duration::from_millis(50));
 						do_mouse_click(&click.button, mouse.as_ref().unwrap())?;
 					}
-					
+
 					amount_clicked += 1;
 				}
 			}
-			Message::RepeatingKeyboardClick(ref click) => {				
+			Message::RepeatingKeyboardClick(ref click) => {
 				if click.amount != 0 && amount_clicked >= click.amount as u128 {
 					continue;
 				}
@@ -221,7 +217,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 				if last_click.elapsed().as_millis() >= (click.interval + daemon_settings.keyboard.added_delay) as u128 {
 					match &click.buttons[current_action] {
 						Actions::PressAndRelease(action) => {
-							if let Ok(key) =  action.parse() {
+							if let Ok(key) = action.parse() {
 								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
 								held_keys.push(key);
 								in_press_and_release = true;
@@ -231,7 +227,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 							}
 						}
 						Actions::Press(key) => {
-							if let Ok(key) =  key.parse() {
+							if let Ok(key) = key.parse() {
 								keyboard.as_ref().unwrap().press_keyboard_button(key)?;
 								held_keys.push(key);
 							} else {
@@ -240,7 +236,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 							}
 						}
 						Actions::Release(key) => {
-							if let Ok(key) =  key.parse() {
+							if let Ok(key) = key.parse() {
 								keyboard.as_ref().unwrap().release_keyboard_button(key)?;
 								let pos = held_keys.iter().position(|&x| x == key);
 								held_keys.swap_remove(pos.unwrap());
@@ -251,8 +247,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 						}
 						Actions::Delay(delay) => {
 							delay_ms = Some(*delay);
-						}
-						// _ => todo!(),
+						} // _ => todo!(),
 					}
 
 					if !in_press_and_release {
@@ -266,32 +261,33 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 					}
 				}
 			}
-			_ => todo!()
+			_ => todo!(),
 		}
 	}
-	
+
 	return Ok(());
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	let args = Args::parse();
-	
+
 	let subscriber = tracing_subscriber::fmt()
 		.compact()
 		.with_file(false)
 		.with_line_number(false)
 		.with_thread_ids(true)
 		.with_target(true)
-		.with_max_level(if args.verbose { Level::TRACE } else { Level::DEBUG })
+		.with_max_level(if args.verbose {
+			Level::TRACE
+		} else {
+			Level::DEBUG
+		})
 		.without_time()
 		.finish();
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
 	trace!("registered logger");
-	trace!("registering signal hooks");
-	let mut int = signal(SignalKind::interrupt()).unwrap();
-	let mut hup = signal(SignalKind::hangup()).unwrap();
 
 	let mouse = if !settings().lock().unwrap().daemon.mouse.disabled {
 		trace!("creating virtual mouse");
@@ -306,16 +302,6 @@ async fn main() -> anyhow::Result<()> {
 	} else {
 		None
 	};
-
-	trace!("creating socket");
-	let listener = {
-		let path_str = socket_file();
-		let path = std::path::Path::new(&path_str);
-		std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("")))?;
-		UnixListener::bind(path).context("could not create socket")?
-	};
-	trace!("binded");
-	info!("listening");
 
 	let (tx, mut rx) = mpsc::channel::<Message>(64);
 	let exiting = Arc::new(Notify::new());
@@ -337,50 +323,15 @@ async fn main() -> anyhow::Result<()> {
 			}
 		}
 	});
-	
-	let func = async |mut stream: UnixStream, tx: Sender<Message>| -> anyhow::Result<()> {
-		if let Err(e) = handle_stream(&mut stream, &tx).await {
-			let message = Message::Error(ErrorResponse {
-				msg: e.to_string(),
-			});
-			
-			let json = Message::encode(&message)?;
-			stream.write_all(json.as_bytes()).await.context("could not write to stream")?;
-		} else {
-			let message = Message::ConfirmResponse(ConfirmResponse {});
-			let json = Message::encode(&message)?;
-			stream.write_all(json.as_bytes()).await.context("could not write to stream")?;
-		}
 
-		return Ok(());
-	};
-
-	loop {
-		let int = int.recv();
-		let hup = hup.recv();
-		tokio::select! {
-			_ = int => {
-				println!();
-				info!("gracefully shutting down");
-				break;
-			}
-			_ = hup => {
-				info!("gracefully shutting down");
-				break;
-			}
-			Ok((stream, _)) = listener.accept() => {
-				let tx = tx.clone();
-				tokio::spawn(func(stream, tx));
-			}
-		}
+	if settings().lock().unwrap().general.communication_method == settings::latest::Methods::DBus {
+		dbus::listen(tx, Arc::new(handle_msg)).await?;
+	} else {
+		socket::listen(tx, Arc::new(handle_msg)).await?;
 	}
-
-	drop(listener);
-	std::fs::remove_file(socket_file()).context("could not delete socket")?;
-	trace!("deleted socket");
 
 	exiting.notify_waiters();
 	thread.await.unwrap();
-	
+
 	return Ok(());
 }

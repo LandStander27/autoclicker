@@ -1,30 +1,30 @@
-use gtk4 as gtk;
-use gtk::prelude::*;
 use gtk::{
-	ApplicationWindow,
-	EventControllerFocus,
-	Expression,
-	StringList,
+	ApplicationWindow, EventControllerFocus, Expression, StringList,
 	glib::{self, clone},
 };
+use gtk4 as gtk;
 use libadwaita::prelude::*;
 
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use super::{
+	ClickType,
 	Config,
 	MouseButton,
-	ClickType,
-	// shortcut,
-	runtime,
 	dialogs,
 	events,
+	// shortcut,
+	runtime,
 };
 
 macro_rules! unfocus_on_enter {
 	($window:ident, $entry:ident) => {{
-		$entry.connect_activate(clone!(#[weak] $window, move |_| gtk4::prelude::GtkWindowExt::set_focus(&$window, None::<&gtk::Widget>)));
+		$entry.connect_activate(clone!(
+			#[weak]
+			$window,
+			move |_| gtk4::prelude::GtkWindowExt::set_focus(&$window, None::<&gtk::Widget>)
+		));
 	}};
 }
 
@@ -50,7 +50,7 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 		.orientation(gtk::Orientation::Vertical)
 		.spacing(12)
 		.build();
-	
+
 	let grid = gtk::Grid::builder()
 		.row_spacing(6)
 		.column_spacing(6)
@@ -75,16 +75,29 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 	let clone = config.clone();
 	window.connect_map(move |window| {
 		let clone = clone.clone();
+
+		#[allow(clippy::await_holding_lock)]
 		gtk::glib::MainContext::default().spawn_local(glib::clone!(
 			#[weak]
 			window,
 			#[weak]
 			button,
 			async move {
+				{
+					let settings = super::settings();
+
+					let lock = settings.lock().unwrap();
+					if lock.general.communication_method == common::settings::latest::Methods::UnixSocket && lock.general.socket_path.is_none() {
+						drop(lock);
+						dialogs::critical_dialog(window.clone(), "Config error", "socket_path must be supplied when communication_method = UnixSocket".into()).await;
+					}
+				}
 				crate::shortcuts::start_session(&window).await.unwrap();
 				crate::shortcuts::listen_events(move || {
 					events::primary_button(&window, &button, clone.clone());
-				}).await.unwrap();
+				})
+				.await
+				.unwrap();
 			}
 		));
 	});
@@ -98,7 +111,7 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 		});
 		let config: std::sync::MutexGuard<'_, Config> = config_clone.lock().unwrap();
 		confy::store("dev.land.Autoclicker", Some("app-data"), config.deref()).unwrap();
-		
+
 		return glib::Propagation::Proceed;
 	});
 
@@ -131,14 +144,14 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 		.orientation(gtk::Orientation::Vertical)
 		.spacing(12)
 		.build();
-	
+
 	let title = gtk::Label::builder()
 		.label("Click position")
 		.halign(gtk::Align::Start)
 		.build();
 	title.add_css_class("title-4");
 	container.append(&title);
-	
+
 	{
 		let grid = gtk::Grid::builder()
 			.row_spacing(6)
@@ -146,21 +159,21 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			.column_homogeneous(true)
 			.row_homogeneous(true)
 			.build();
-		
+
 		{
 			let pos_label = gtk::Label::builder()
 				.label("Position: ")
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&pos_label, 0, 0, 1, 1);
-			
+
 			let pos_grid = gtk::Grid::builder()
 				.row_spacing(6)
 				.column_spacing(6)
 				.column_homogeneous(true)
 				.row_homogeneous(true)
 				.build();
-			
+
 			let x_entry = gtk::Entry::new();
 			x_entry.set_placeholder_text(Some("X pos"));
 			let config_clone = config.clone();
@@ -178,7 +191,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					} else {
 						config.mouse.enabled_axis.0 = false;
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -186,7 +199,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			x_entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, x_entry);
 			pos_grid.attach(&x_entry, 0, 0, 1, 1);
-			
+
 			let y_entry = gtk::Entry::new();
 			y_entry.set_placeholder_text(Some("Y pos"));
 			{
@@ -213,7 +226,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 					} else {
 						config.mouse.enabled_axis.1 = false;
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -221,9 +234,9 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			y_entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, y_entry);
 			pos_grid.attach(&y_entry, 1, 0, 1, 1);
-			
+
 			grid.attach(&pos_grid, 1, 0, 1, 1);
-			
+
 			let set_pos_btn = gtk::Button::with_label("Set position");
 			let (sender, receiver) = async_channel::bounded::<anyhow::Result<(i32, i32)>>(1);
 			set_pos_btn.connect_clicked(move |btn| {
@@ -261,7 +274,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 								config.mouse.enabled_axis.1 = true;
 								tracing::trace!(?response);
 							}
-							
+
 							Err(e) => {
 								dialogs::error_dialog(window.clone(), "Command failed", e.to_string()).await;
 							}
@@ -271,19 +284,19 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			));
 			grid.attach(&set_pos_btn, 1, 1, 1, 1);
 		}
-		
+
 		{
 			let int_label = gtk::Label::builder()
 				.label("Interval: ")
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&int_label, 0, 2, 1, 1);
-			
+
 			let hbox = gtk::Box::builder()
 				.orientation(gtk::Orientation::Horizontal)
 				.spacing(12)
 				.build();
-			
+
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
@@ -307,7 +320,7 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 							config.mouse.interval = num;
 						}
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -315,18 +328,18 @@ pub fn click_position(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, entry);
 			hbox.append(&entry);
-			
+
 			let label = gtk::Label::new(Some("ms"));
 			label.set_hexpand(false);
 			label.set_halign(gtk::Align::End);
 			hbox.append(&label);
-			
+
 			grid.attach(&hbox, 1, 2, 1, 1);
 		}
 
 		container.append(&grid);
 	}
-	
+
 	return container;
 }
 
@@ -357,12 +370,12 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&button_label, 0, 0, 1, 1);
-			
+
 			let button_dropdown = gtk::DropDown::new(Some(StringList::new(&["Left", "Right", "Middle"])), Expression::NONE);
 			button_dropdown.set_selected(match config.lock().unwrap().mouse.mouse_button {
 				MouseButton::Left => 0,
 				MouseButton::Right => 1,
-				MouseButton::Middle => 2
+				MouseButton::Middle => 2,
 			});
 
 			let config_clone = config.clone();
@@ -376,11 +389,11 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 						panic!("how did this happen");
 					}
 				};
-				
+
 				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
 			});
-			
+
 			grid.attach(&button_dropdown, 1, 0, 1, 1);
 		}
 
@@ -390,11 +403,11 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&button_label, 0, 1, 1, 1);
-			
+
 			let button_dropdown = gtk::DropDown::new(Some(StringList::new(&["Single", "Double"])), Expression::NONE);
 			button_dropdown.set_selected(match config.lock().unwrap().mouse.typ {
 				ClickType::Single => 0,
-				ClickType::Double => 1
+				ClickType::Double => 1,
 			});
 
 			let config_clone = config.clone();
@@ -407,17 +420,17 @@ pub fn click_type(config: Arc<Mutex<Config>>) -> gtk::Box {
 						panic!("how did this happen");
 					}
 				};
-				
+
 				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
 			});
-			
+
 			grid.attach(&button_dropdown, 1, 1, 1, 1);
 		}
-		
+
 		container.append(&grid);
 	}
-	
+
 	return container;
 }
 
@@ -433,7 +446,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 		.build();
 	title.add_css_class("title-4");
 	container.append(&title);
-	
+
 	{
 		let grid = gtk::Grid::builder()
 			.row_spacing(6)
@@ -441,18 +454,18 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 			.column_homogeneous(true)
 			.row_homogeneous(true)
 			.build();
-		
+
 		{
 			let radio1 = gtk::CheckButton::with_label("Click until stopped");
 			let radio2 = gtk::CheckButton::with_label("Click number of times: ");
-			
+
 			radio2.set_group(Some(&radio1));
-			
+
 			grid.attach(&radio1, 0, 0, 1, 1);
 			grid.attach(&radio2, 0, 1, 1, 1);
-			
+
 			radio1.activate();
-			
+
 			let entry = gtk::Entry::new();
 			grid.attach(&entry, 1, 1, 1, 1);
 
@@ -465,7 +478,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				}
 			}
 			unfocus_on_enter!(window, entry);
-			
+
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -476,7 +489,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				move |_| {
 					only_allow_numbers!(entry);
 					let num = entry.text();
-					
+
 					let mut config = config_clone.lock().unwrap();
 					config.mouse.repeat = if !num.is_empty() {
 						if radio2.is_active() {
@@ -487,7 +500,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 					} else {
 						0
 					};
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -508,7 +521,7 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 							config.mouse.repeat = s.parse().unwrap();
 						}
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 
@@ -516,10 +529,10 @@ pub fn click_repeat(window: &ApplicationWindow, config: Arc<Mutex<Config>>) -> g
 				}
 			));
 		}
-		
+
 		container.append(&grid);
 	}
-	
+
 	return container;
 }
 
@@ -593,7 +606,7 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 		.build();
 	title.add_css_class("title-4");
 	container.append(&title);
-	
+
 	{
 		let grid = gtk::Grid::builder()
 			.row_spacing(6)
@@ -601,18 +614,18 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 			.column_homogeneous(true)
 			.row_homogeneous(true)
 			.build();
-		
+
 		{
 			let radio1 = gtk::CheckButton::with_label("Click until stopped");
 			let radio2 = gtk::CheckButton::with_label("Click number of times: ");
-			
+
 			radio2.set_group(Some(&radio1));
-			
+
 			grid.attach(&radio1, 0, 0, 1, 1);
 			grid.attach(&radio2, 0, 1, 1, 1);
-			
+
 			radio1.activate();
-			
+
 			let entry = gtk::Entry::new();
 			grid.attach(&entry, 1, 1, 1, 1);
 
@@ -625,7 +638,7 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 				}
 			}
 			unfocus_on_enter!(window, entry);
-			
+
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -636,7 +649,7 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 				move |_| {
 					only_allow_numbers!(entry);
 					let num = entry.text();
-					
+
 					let mut config = config_clone.lock().unwrap();
 					config.keyboard.repeat = if !num.is_empty() {
 						if radio2.is_active() {
@@ -647,7 +660,7 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 					} else {
 						0
 					};
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -668,7 +681,7 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 							config.keyboard.repeat = s.parse().unwrap();
 						}
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 
@@ -676,10 +689,10 @@ pub fn click_repeat_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Confi
 				}
 			));
 		}
-		
+
 		container.append(&grid);
 	}
-	
+
 	return container;
 }
 
@@ -688,14 +701,14 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 		.orientation(gtk::Orientation::Vertical)
 		.spacing(12)
 		.build();
-	
+
 	let title = gtk::Label::builder()
 		.label("Timing")
 		.halign(gtk::Align::Start)
 		.build();
 	title.add_css_class("title-4");
 	container.append(&title);
-	
+
 	{
 		let grid = gtk::Grid::builder()
 			.row_spacing(6)
@@ -703,23 +716,31 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			.column_homogeneous(true)
 			.row_homogeneous(true)
 			.build();
-		
+
 		{
 			let delay_label = gtk::Label::builder()
 				.label("Delay before repeat: ")
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&delay_label, 0, 1, 1, 1);
-			
+
 			let hbox = gtk::Box::builder()
 				.orientation(gtk::Orientation::Horizontal)
 				.spacing(12)
 				.build();
-			
+
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text(config.lock().unwrap().keyboard.delay_before_repeat.to_string().as_str());
+			entry.set_text(
+				config
+					.lock()
+					.unwrap()
+					.keyboard
+					.delay_before_repeat
+					.to_string()
+					.as_str(),
+			);
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -732,7 +753,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.delay_before_repeat = num.parse().unwrap();
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -740,31 +761,39 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, entry);
 			hbox.append(&entry);
-			
+
 			let label = gtk::Label::new(Some("ms"));
 			label.set_hexpand(false);
 			label.set_halign(gtk::Align::End);
 			hbox.append(&label);
-			
+
 			grid.attach(&hbox, 1, 1, 1, 1);
 		}
-		
+
 		{
 			let hold_label = gtk::Label::builder()
 				.label("Hold duration: ")
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&hold_label, 0, 2, 1, 1);
-			
+
 			let hbox = gtk::Box::builder()
 				.orientation(gtk::Orientation::Horizontal)
 				.spacing(12)
 				.build();
-			
+
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text(config.lock().unwrap().keyboard.hold_duration.to_string().as_str());
+			entry.set_text(
+				config
+					.lock()
+					.unwrap()
+					.keyboard
+					.hold_duration
+					.to_string()
+					.as_str(),
+			);
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -777,7 +806,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.hold_duration = num.parse().unwrap();
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -785,31 +814,39 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, entry);
 			hbox.append(&entry);
-			
+
 			let label = gtk::Label::new(Some("ms"));
 			label.set_hexpand(false);
 			label.set_halign(gtk::Align::End);
 			hbox.append(&label);
-			
+
 			grid.attach(&hbox, 1, 2, 1, 1);
 		}
-		
+
 		{
 			let int_label = gtk::Label::builder()
 				.label("Interval: ")
 				.halign(gtk::Align::Start)
 				.build();
 			grid.attach(&int_label, 0, 3, 1, 1);
-			
+
 			let hbox = gtk::Box::builder()
 				.orientation(gtk::Orientation::Horizontal)
 				.spacing(12)
 				.build();
-			
+
 			let entry = gtk::Entry::new();
 			entry.set_hexpand(true);
 			entry.set_placeholder_text(Some("Duration"));
-			entry.set_text(config.lock().unwrap().keyboard.interval.to_string().as_str());
+			entry.set_text(
+				config
+					.lock()
+					.unwrap()
+					.keyboard
+					.interval
+					.to_string()
+					.as_str(),
+			);
 			let config_clone = config.clone();
 			let focus_controller = EventControllerFocus::new();
 			focus_controller.connect_leave(clone!(
@@ -822,7 +859,7 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 					if !num.is_empty() {
 						config.keyboard.interval = num.parse().unwrap();
 					}
-					
+
 					#[cfg(debug_assertions)]
 					tracing::debug!(?config);
 				}
@@ -830,17 +867,17 @@ pub fn click_interval_keyboard(window: &ApplicationWindow, config: Arc<Mutex<Con
 			entry.add_controller(focus_controller);
 			unfocus_on_enter!(window, entry);
 			hbox.append(&entry);
-			
+
 			let label = gtk::Label::new(Some("ms"));
 			label.set_hexpand(false);
 			label.set_halign(gtk::Align::End);
 			hbox.append(&label);
-			
+
 			grid.attach(&hbox, 1, 3, 1, 1);
 		}
-		
+
 		container.append(&grid);
 	}
-	
+
 	return container;
 }

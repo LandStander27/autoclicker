@@ -1,40 +1,36 @@
-use gtk4 as gtk;
 use gtk::prelude::*;
-use gtk::{
-	Application,
-	ApplicationWindow,
-	Stack,
-	StackSwitcher,
-	StackTransitionType
-};
+use gtk::{Application, ApplicationWindow, Stack, StackSwitcher, StackTransitionType};
+use gtk4 as gtk;
 
-use std::sync::{Arc, Mutex};
-use std::sync::OnceLock;
-use tokio::runtime::Runtime;
-use serde::{Serialize, Deserialize};
 use anyhow::Context;
 use common::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
 
-mod widgets;
 mod dialogs;
 mod events;
+mod widgets;
 
 fn runtime() -> &'static Runtime {
 	static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
 }
 
-pub(crate) fn settings() -> Arc<Mutex<config::Settings>> {
-	static SETTINGS: OnceLock<Arc<Mutex<config::Settings>>> = OnceLock::new();
+pub(crate) fn settings() -> Arc<Mutex<settings::Settings>> {
+	static SETTINGS: OnceLock<Arc<Mutex<settings::Settings>>> = OnceLock::new();
 	if SETTINGS.get().is_none() {
-		let conf = match config::load() {
+		let conf = match settings::load() {
 			Ok(o) => o,
 			Err(e) => {
 				tracing::error!("could not get settings: {e}");
 				std::process::exit(1);
 			}
 		};
-		return SETTINGS.get_or_init(move || Arc::new(Mutex::new(conf))).clone();
+		return SETTINGS
+			.get_or_init(move || Arc::new(Mutex::new(conf)))
+			.clone();
 	}
 	return SETTINGS.get().unwrap().clone();
 }
@@ -48,7 +44,7 @@ pub(super) enum MouseButton {
 
 impl Default for MouseButton {
 	fn default() -> Self {
-    	return Self::Left;
+		return Self::Left;
 	}
 }
 
@@ -66,7 +62,7 @@ impl Default for Screen {
 
 impl std::str::FromStr for Screen {
 	type Err = ();
-	
+
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		return Ok(match s {
 			"mouse" => Self::Mouse,
@@ -84,7 +80,7 @@ pub(super) enum ClickType {
 
 impl Default for ClickType {
 	fn default() -> Self {
-    	return Self::Single;
+		return Self::Single;
 	}
 }
 
@@ -161,11 +157,9 @@ impl Window {
 			}
 		});
 
-		return Self {
-			app
-		};
+		return Self { app };
 	}
-	
+
 	pub fn run(&self) {
 		self.app.run();
 	}
@@ -177,7 +171,7 @@ impl Window {
 		if settings().lock().unwrap().client.disable_window_controls {
 			header.set_show_end_title_buttons(false);
 		}
-		
+
 		return header;
 	}
 
@@ -193,12 +187,14 @@ impl Window {
 		window.set_default_size(width, height);
 
 		let css = gtk::CssProvider::new();
-		css.load_from_data(r#"
+		css.load_from_data(
+			r#"
 scrolledwindow > textview.monospace {
 	color: red;
 	caret-color: white;
 }
-"#);
+"#,
+		);
 		let display = gtk::prelude::WidgetExt::display(&window);
 		gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
@@ -223,7 +219,9 @@ scrolledwindow > textview.monospace {
 
 		let config: Arc<Mutex<Config>> = Arc::new(Mutex::new(res.context("could not load app-data")?));
 
-		let stack = Stack::builder().transition_type(StackTransitionType::SlideLeftRight).build();
+		let stack = Stack::builder()
+			.transition_type(StackTransitionType::SlideLeftRight)
+			.build();
 		let switcher = StackSwitcher::builder().stack(&stack).build();
 		window.set_titlebar(Some(&Window::build_titlebar(&switcher)));
 		container.append(&stack);
@@ -233,11 +231,11 @@ scrolledwindow > textview.monospace {
 				.orientation(gtk::Orientation::Vertical)
 				.spacing(12)
 				.build();
-			
+
 			container.append(&widgets::click_type(config.clone()));
 			container.append(&widgets::click_repeat(&window, config.clone()));
 			container.append(&widgets::click_position(&window, config.clone()));
-			
+
 			stack.add_titled(&container, Some("mouse"), "Mouse");
 		}
 
@@ -246,11 +244,11 @@ scrolledwindow > textview.monospace {
 				.orientation(gtk::Orientation::Vertical)
 				.spacing(12)
 				.build();
-			
+
 			container.append(&widgets::key_sequence(&window, config.clone()));
 			container.append(&widgets::click_repeat_keyboard(&window, config.clone()));
 			container.append(&widgets::click_interval_keyboard(&window, config.clone()));
-			
+
 			stack.add_titled(&container, Some("keyboard"), "Keyboard");
 		}
 
@@ -265,11 +263,12 @@ scrolledwindow > textview.monospace {
 			config.screen = screen.parse().unwrap();
 			tracing::trace!("current page: {}", screen);
 		});
-		
+
 		container.append(&widgets::start_clicking(&window, config));
 		window.set_child(Some(&container));
+
 		window.present();
-		
+
 		return Ok(());
 	}
 }

@@ -1,14 +1,26 @@
 use anyhow::Context;
-use gtk4 as gtk;
 use gtk::{
 	ApplicationWindow,
-	prelude::*,
 	glib::{self, clone},
+	prelude::*,
 };
+use gtk4 as gtk;
 use std::sync::{Arc, Mutex};
 
-use super::{runtime, Config};
-use crate::{unix, key_parser};
+use super::{Config, runtime};
+use crate::{key_parser, unix};
+
+pub async fn critical_dialog(window: ApplicationWindow, title: &str, msg: String) {
+	tracing::debug!("opening critical dialog");
+	let info_dialog = gtk::AlertDialog::builder()
+		.modal(true)
+		.message(title)
+		.detail(&msg)
+		.build();
+
+	info_dialog.choose_future(Some(&window)).await.unwrap();
+	std::process::exit(1);
+}
 
 pub async fn error_dialog(window: ApplicationWindow, title: &str, msg: String) {
 	tracing::debug!("opening error dialog");
@@ -28,15 +40,19 @@ pub async fn enable_service_dialog(window: ApplicationWindow) {
 		.message("Background service on boot?")
 		.detail("Do you want the service to start on boot? (systemctl --user enable autoclickerd.service)")
 		.build();
-	
+
 	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
-	
+
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			sender.send(unix::enable_systemd_service("autoclickerd.service").await).await.context("could not send over channel").unwrap();
+			sender
+				.send(unix::enable_systemd_service("autoclickerd.service").await)
+				.await
+				.context("could not send over channel")
+				.unwrap();
 		});
-		
+
 		glib::spawn_future_local(clone!(
 			#[weak]
 			window,
@@ -56,15 +72,19 @@ pub async fn service_dialog(window: ApplicationWindow) {
 		.message("The background service does not seem to be running.")
 		.detail("Do you want to start the service? (systemctl --user start autoclickerd.service)")
 		.build();
-	
+
 	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
-	
+
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			sender.send(unix::start_systemd_service("autoclickerd.service").await).await.context("could not send over channel").unwrap();
+			sender
+				.send(unix::start_systemd_service("autoclickerd.service").await)
+				.await
+				.context("could not send over channel")
+				.unwrap();
 		});
-		
+
 		glib::spawn_future_local(clone!(
 			#[weak]
 			window,
@@ -88,13 +108,17 @@ pub async fn group_dialog(window: ApplicationWindow) {
 		.message("Must be in the group 'input'.")
 		.detail("Do you want to be automatically added to it? (will ask for root)")
 		.build();
-	
+
 	let answer = question_dialog.choose_future(Some(&window)).await.unwrap();
 
 	if answer == 1 {
 		let (sender, receiver) = async_channel::bounded::<anyhow::Result<()>>(1);
 		runtime().spawn(async move {
-			sender.send(unix::add_user_to_group("input").await).await.context("could not send over channel").unwrap();
+			sender
+				.send(unix::add_user_to_group("input").await)
+				.await
+				.context("could not send over channel")
+				.unwrap();
 		});
 
 		glib::spawn_future_local(clone!(
@@ -105,7 +129,6 @@ pub async fn group_dialog(window: ApplicationWindow) {
 					Ok(Err(e)) => error_dialog(window.clone(), "Command failed", e.to_string()).await,
 					Ok(Ok(_)) => reboot_dialog(&window).await,
 					_ => {}
-					// Err(_) => panic!("could not recv msg from channel"),
 				}
 			}
 		));
@@ -120,7 +143,7 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 		.default_width(500)
 		.default_height(500)
 		.build();
-	
+
 	let vbox = gtk::Box::builder()
 		.orientation(gtk::Orientation::Vertical)
 		.margin_top(24)
@@ -133,18 +156,30 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 		.hexpand(true)
 		.vexpand(true)
 		.build();
-	
+
 	let scrollable = gtk::ScrolledWindow::builder()
 		.vexpand(true)
 		.hexpand(true)
 		.build();
-	
+
 	let debounce_id: Arc<Mutex<Option<glib::SourceId>>> = Arc::new(Mutex::new(None));
 	let tag_table = gtk::TextTagTable::new();
-	let str_tag = gtk::TextTag::builder().name("string").foreground("green").build();
-	let key_tag = gtk::TextTag::builder().name("keycode").foreground("cyan").build();
-	let error_tag = gtk::TextTag::builder().name("invalid_keycode").foreground("red").build();
-	let action_tag = gtk::TextTag::builder().name("action").foreground("white").build();
+	let str_tag = gtk::TextTag::builder()
+		.name("string")
+		.foreground("green")
+		.build();
+	let key_tag = gtk::TextTag::builder()
+		.name("keycode")
+		.foreground("cyan")
+		.build();
+	let error_tag = gtk::TextTag::builder()
+		.name("invalid_keycode")
+		.foreground("red")
+		.build();
+	let action_tag = gtk::TextTag::builder()
+		.name("action")
+		.foreground("white")
+		.build();
 	tag_table.add(&str_tag);
 	tag_table.add(&key_tag);
 	tag_table.add(&error_tag);
@@ -175,7 +210,10 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 		}
 	));
 
-	let entry = gtk::TextView::builder().buffer(&buffer).monospace(true).build();
+	let entry = gtk::TextView::builder()
+		.buffer(&buffer)
+		.monospace(true)
+		.build();
 	{
 		let config = config.lock().unwrap();
 		entry.buffer().set_text(&config.keyboard.raw_sequence);
@@ -183,14 +221,14 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 	dialog.set_child(Some(&vbox));
 	scrollable.set_child(Some(&entry));
 	vbox.append(&scrollable);
-	
+
 	let button_grid = gtk::Grid::builder()
 		.row_spacing(6)
 		.column_spacing(6)
 		.column_homogeneous(true)
 		.row_homogeneous(true)
 		.build();
-	
+
 	let cancel_button = gtk::Button::with_label("Cancel");
 	cancel_button.connect_clicked(clone!(
 		#[weak]
@@ -199,7 +237,7 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 			dialog.close();
 		}
 	));
-	
+
 	let ok_button = gtk::Button::with_label("Ok");
 	ok_button.add_css_class("suggested-action");
 	ok_button.connect_clicked(clone!(
@@ -225,7 +263,7 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 					return;
 				}
 			};
-			
+
 			#[cfg(debug_assertions)]
 			tracing::debug!(?config);
 
@@ -259,16 +297,16 @@ pub fn sequence_dialog(window: &ApplicationWindow, config: Arc<Mutex<Config>>) {
 						return glib::Propagation::Stop;
 					}
 				};
-				
+
 				#[cfg(debug_assertions)]
 				tracing::debug!(?config);
-				
+
 				dialog.close();
-				
+
 				return glib::Propagation::Stop;
 			}
 
-			glib::Propagation::Proceed
+			return glib::Propagation::Proceed;
 		}
 	));
 	entry.add_controller(key_controller);

@@ -3,10 +3,10 @@ use std::{
 	os::unix::net::UnixStream,
 };
 
-use anyhow::Context;
 use crate::{ClickType, MouseButton};
+use anyhow::Context;
 
-use super::window::{MouseConfig, KeyboardConfig};
+use super::window::{KeyboardConfig, MouseConfig};
 use common::prelude::*;
 
 pub fn socket_file() -> String {
@@ -14,7 +14,12 @@ pub fn socket_file() -> String {
 	let arc = crate::window::settings();
 	let settings = arc.lock().unwrap();
 	let path = &settings.general.socket_path;
-	return path.replace("$id", id.to_string().as_str());
+
+	assert!(path.is_some(), "socket_path must be supplied when communication_method = UnixSocket");
+	return path
+		.as_ref()
+		.unwrap()
+		.replace("$id", id.to_string().as_str());
 }
 
 pub fn send_stop() -> anyhow::Result<()> {
@@ -22,13 +27,19 @@ pub fn send_stop() -> anyhow::Result<()> {
 	let request = Message::StopClicking(StopClicking {});
 
 	let json = Message::encode(&request).context("could not encode as json")?;
-	stream.write(json.as_bytes()).context("could not write to socket")?;
-	
-	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	stream
+		.write(json.as_bytes())
+		.context("could not write to socket")?;
+
+	stream
+		.shutdown(std::net::Shutdown::Write)
+		.context("could not shutdown writing")?;
 	let mut msg = String::new();
-	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	stream
+		.read_to_string(&mut msg)
+		.context("could not read from socket")?;
 	let response = Message::decode(msg).context("could not decode json")?;
-	
+
 	if let Message::Error(e) = response {
 		return Err(anyhow::anyhow!(e.msg));
 	}
@@ -43,25 +54,44 @@ pub fn send_mouse_request(config: &MouseConfig) -> anyhow::Result<()> {
 			MouseButton::Left => "left",
 			MouseButton::Right => "right",
 			MouseButton::Middle => "middle",
-		}.to_string(),
+		}
+		.to_string(),
 		typ: match config.typ {
 			ClickType::Single => "single",
 			ClickType::Double => "double",
-		}.to_string(),
+		}
+		.to_string(),
 		amount: config.repeat,
 		interval: config.interval,
-		position: (if config.enabled_axis.0 { Some(config.position.0) } else { None }, if config.enabled_axis.1 { Some(config.position.1) } else { None }),
+		position: (
+			if config.enabled_axis.0 {
+				Some(config.position.0)
+			} else {
+				None
+			},
+			if config.enabled_axis.1 {
+				Some(config.position.1)
+			} else {
+				None
+			},
+		),
 		// delay_until_first_click: 2000,
 	});
 
 	let json = Message::encode(&request).context("could not encode as json")?;
-	stream.write(json.as_bytes()).context("could not write to socket")?;
-	
-	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	stream
+		.write(json.as_bytes())
+		.context("could not write to socket")?;
+
+	stream
+		.shutdown(std::net::Shutdown::Write)
+		.context("could not shutdown writing")?;
 	let mut msg = String::new();
-	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	stream
+		.read_to_string(&mut msg)
+		.context("could not read from socket")?;
 	let response = Message::decode(msg).context("could not decode json")?;
-	
+
 	if let Message::Error(e) = response {
 		return Err(anyhow::anyhow!(e.msg));
 	}
@@ -84,12 +114,18 @@ pub fn send_keyboard_request(config: &KeyboardConfig) -> anyhow::Result<()> {
 		hold_duration: config.hold_duration,
 	});
 	let json = Message::encode(&request).context("could not encode as json")?;
-	stream.write(json.as_bytes()).context("could not write to socket")?;
-	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	stream
+		.write(json.as_bytes())
+		.context("could not write to socket")?;
+	stream
+		.shutdown(std::net::Shutdown::Write)
+		.context("could not shutdown writing")?;
 	let mut msg = String::new();
-	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	stream
+		.read_to_string(&mut msg)
+		.context("could not read from socket")?;
 	let response = Message::decode(msg).context("could not decode json")?;
-	
+
 	if let Message::Error(e) = response {
 		return Err(anyhow::anyhow!(e.msg));
 	}

@@ -3,8 +3,8 @@ use std::{
 	os::unix::net::UnixStream,
 };
 
-use anyhow::{anyhow, Context};
 use crate::vmouse::Mouse;
+use anyhow::{Context, anyhow};
 
 #[inline]
 pub fn is_hyprland() -> bool {
@@ -35,11 +35,17 @@ fn socket_file() -> anyhow::Result<String> {
 #[inline]
 fn get_pos() -> anyhow::Result<(i32, i32)> {
 	let mut stream = UnixStream::connect(socket_file()?).context("could not connect to socket")?;
-	stream.write(b"/cursorpos").context("could not write to socket")?;
+	stream
+		.write(b"/cursorpos")
+		.context("could not write to socket")?;
 
-	stream.shutdown(std::net::Shutdown::Write).context("could not shutdown writing")?;
+	stream
+		.shutdown(std::net::Shutdown::Write)
+		.context("could not shutdown writing")?;
 	let mut msg = String::new();
-	stream.read_to_string(&mut msg).context("could not read from socket")?;
+	stream
+		.read_to_string(&mut msg)
+		.context("could not read from socket")?;
 
 	let pos: Vec<&str> = msg.split(", ").collect();
 	if pos.len() != 2 {
