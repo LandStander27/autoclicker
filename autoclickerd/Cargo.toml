@@ -6,8 +6,8 @@ version.workspace = true
 [dependencies]
 signal-hook = "0.3.18"
 evdev-rs = "0.6.2"
-zbus = { version = "5.9.0", default-features = false, features = [ "tokio" ]}
 
+zbus.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 clap.workspace = true

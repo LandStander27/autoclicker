@@ -281,6 +281,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "version",
+ "zbus",
 ]
 
 [[package]]
@@ -2040,7 +2041,6 @@ dependencies = [
  "slab",
  "socket2",
  "tokio-macros",
- "tracing",
  "windows-sys",
 ]
 
@@ -2440,7 +2440,6 @@ dependencies = [
  "ordered-stream",
  "serde",
  "serde_repr",
- "tokio",
  "tracing",
  "uds_windows",
  "windows-sys",

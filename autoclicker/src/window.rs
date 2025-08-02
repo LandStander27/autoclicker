@@ -13,7 +13,7 @@ mod dialogs;
 mod events;
 mod widgets;
 
-fn runtime() -> &'static Runtime {
+pub(crate) fn runtime() -> &'static Runtime {
 	static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 	return RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."));
 }
@@ -147,8 +147,19 @@ impl Window {
 	pub fn new<S: Into<String>>(class: S, title: S, width: i32, height: i32) -> Self {
 		let title = title.into();
 		let class = class.into();
-		let app = Application::builder().application_id(class.clone()).build();
+
+		let app = Application::builder()
+			.application_id(class.clone())
+			.flags(gtk::gio::ApplicationFlags::FLAGS_NONE | gtk::gio::ApplicationFlags::NON_UNIQUE)
+			.build();
+
+		let action = gtk::gio::SimpleAction::new("quit", None);
+		app.add_action(&action);
+
 		app.connect_activate(move |app| {
+			let action = gtk::gio::SimpleAction::new("quit", None);
+			app.add_action(&action);
+
 			let title = title.clone();
 			let class = class.clone();
 			if let Err(e) = Window::build_ui(app, class, title, width, height) {
@@ -161,6 +172,9 @@ impl Window {
 	}
 
 	pub fn run(&self) {
+		let action = gtk::gio::SimpleAction::new("quit", None);
+		self.app.add_action(&action);
+
 		self.app.run();
 	}
 

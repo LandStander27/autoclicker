@@ -33,8 +33,10 @@ fn main() -> anyhow::Result<()> {
 	trace!("registered logger");
 	info!("autoclicker {}", version::version);
 
+	tracing::trace!("im right here");
+	// window::runtime();
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
 	window.run();
 
-	return Ok(());
+	return Ok(());;;;;
 }
