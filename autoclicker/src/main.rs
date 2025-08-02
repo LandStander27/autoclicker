@@ -38,5 +38,5 @@ fn main() -> anyhow::Result<()> {
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
 	window.run();
 
-	return Ok(());;;;;
+	return Ok(());
 }
