@@ -28,7 +28,7 @@ jobs:
         run: cargo b --release --package autoclickerd --all-features
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --all-features
 
       - name: Upload autoclicker client
         uses: https://code.forgejo.org/forgejo/upload-artifact@v4
