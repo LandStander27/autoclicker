@@ -1,7 +1,6 @@
 # Autoclicker
 
-[![build status](https://codeberg.org/Land/autoclicker/actions/workflows/build.yaml/badge.svg)](https://codeberg.org/Land/autoclicker/actions?workflow=build.yaml)
-[![test status](https://codeberg.org/Land/autoclicker/actions/workflows/tests.yaml/badge.svg)](https://codeberg.org/Land/autoclicker/actions?workflow=tests.yaml)
+[![build and test status](https://codeberg.org/Land/autoclicker/actions/workflows/build_and_test.yaml/badge.svg)](https://codeberg.org/Land/autoclicker/actions?workflow=build_and_test.yaml)
 
 **A modern Linux autoclicker with a GTK UI and global shortcut support that even works in Wayland.**
 Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool).

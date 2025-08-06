@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-mod dialogs;
+pub mod dialogs;
 mod events;
 mod widgets;
 

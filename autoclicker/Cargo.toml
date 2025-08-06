@@ -3,6 +3,10 @@ name = "autoclicker"
 version.workspace = true
 edition.workspace = true
 
+[features]
+socket = []
+dbus = [ "zbus" ]
+
 [dependencies]
 gtk4 = { version = "0.9.6", features = [ "v4_10" ] }
 libadwaita = { version = "0.7.2", features = [ "v1_5" ]}
@@ -14,11 +18,11 @@ confy = "1.0.0"
 nom = "8.0.0"
 nom-language = "0.1.0"
 
-zbus.workspace = true
+zbus = { workspace = true, optional = true }
+nix.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
-nix.workspace = true
 tokio.workspace = true
 
 version.workspace = true

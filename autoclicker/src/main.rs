@@ -4,12 +4,14 @@ use tracing::{Level, debug, error, info, trace, warn};
 mod window;
 use window::*;
 
-mod dbus;
+mod comm;
 mod key_parser;
 mod keycodes;
 mod shortcuts;
-mod socket;
 mod unix;
+
+#[cfg(not(any(feature = "socket", feature = "dbus")))]
+compile_error!("either dbus or socket must be enabled");
 
 fn enable_logger() {
 	let subscriber = tracing_subscriber::fmt()
@@ -33,8 +35,6 @@ fn main() -> anyhow::Result<()> {
 	trace!("registered logger");
 	info!("autoclicker {}", version::version);
 
-	tracing::trace!("im right here");
-	// window::runtime();
 	let window = Window::new("dev.land.Autoclicker", "Autoclicker", 200, 450);
 	window.run();
 

@@ -16,11 +16,21 @@ use tracing::{Level, debug, error, info, trace, warn};
 struct Args {
 	#[arg(short, long, help = "increase verbosity")]
 	verbose: bool,
+
+	#[arg(short, long, help = "do not actually take action on any request")]
+	dry_run: bool,
 }
 
-mod dbus;
-mod hypr;
+#[cfg(not(any(feature = "socket", feature = "dbus")))]
+compile_error!("either dbus or socket must be enabled");
+
+#[cfg(feature = "socket")]
 mod socket;
+
+#[cfg(feature = "dbus")]
+mod dbus;
+
+mod hypr;
 mod vdevice;
 mod vkeyboard;
 mod vmouse;
@@ -29,9 +39,6 @@ use vkeyboard::*;
 use vmouse::*;
 
 async fn handle_msg(msg: String) -> anyhow::Result<Message> {
-	// let mut msg = String::new();
-	// stream.read_to_string(&mut msg).await.context("failed to read stream")?;
-
 	let req = Message::decode(msg)?;
 	trace!(?req);
 
@@ -63,7 +70,6 @@ async fn handle_msg(msg: String) -> anyhow::Result<Message> {
 		}
 	}
 
-	// tx.send(req).await.context("could not send event over channel")?;
 	return Ok(req);
 }
 
@@ -124,7 +130,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 	'outer: loop {
 		tokio::select! {
 			biased;
-			_ = exiting.notified() => break,
+			_ = exiting.notified() => return Ok(()),
 			msg = rx.recv() => {
 				if let Some(msg) = msg {
 					trace!("got msg from channel");
@@ -134,6 +140,9 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 					if let Message::RepeatingKeyboardClick(_) = last_message {
 						current_action = 0;
 					}
+				} else {
+					warn!("recved nothing from channel");
+					return Ok(());
 				}
 			}
 			_ = tokio::time::sleep(recv_timeout) => {}
@@ -247,7 +256,7 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 						}
 						Actions::Delay(delay) => {
 							delay_ms = Some(*delay);
-						} // _ => todo!(),
+						}
 					}
 
 					if !in_press_and_release {
@@ -264,12 +273,10 @@ async fn bg_thread(exiting: Arc<Notify>, mut rx: Receiver<Message>, mouse: Optio
 			_ => todo!(),
 		}
 	}
-
-	return Ok(());
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> anyhow::Result<std::process::ExitCode> {
 	let args = Args::parse();
 
 	let subscriber = tracing_subscriber::fmt()
@@ -307,7 +314,7 @@ async fn main() -> anyhow::Result<()> {
 	let exiting = Arc::new(Notify::new());
 	let clone = exiting.clone();
 	let thread = tokio::spawn(async move {
-		if !settings().lock().unwrap().daemon.dry_run {
+		if !settings().lock().unwrap().daemon.dry_run && !args.dry_run {
 			if let Err(e) = bg_thread(clone, rx, mouse, keyboard).await {
 				error!("from bg_thread: {e}");
 			}
@@ -324,14 +331,36 @@ async fn main() -> anyhow::Result<()> {
 		}
 	});
 
+	#[cfg_attr(all(feature = "socket", feature = "dbus"), allow(unused_mut))]
+	let mut err = false;
+
 	if settings().lock().unwrap().general.communication_method == settings::latest::Methods::DBus {
+		#[cfg(feature = "dbus")]
 		dbus::listen(tx, Arc::new(handle_msg)).await?;
-	} else {
+
+		#[cfg(not(feature = "dbus"))]
+		{
+			error!("this build was not compiled with dbus support");
+			tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+			err = true;
+		}
+	} else if settings().lock().unwrap().general.communication_method == settings::latest::Methods::UnixSocket {
+		#[cfg(feature = "socket")]
 		socket::listen(tx, Arc::new(handle_msg)).await?;
+
+		#[cfg(not(feature = "socket"))]
+		{
+			error!("this build was not compiled with unix socket support");
+			tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+			err = true;
+		}
 	}
 
+	debug!("notifying background thread...");
 	exiting.notify_waiters();
+
+	debug!("waiting...");
 	thread.await.unwrap();
 
-	return Ok(());
+	return Ok((err as u8).into());
 }
