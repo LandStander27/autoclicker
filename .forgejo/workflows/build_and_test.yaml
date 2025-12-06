@@ -18,7 +18,7 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Install deps
-        run: pacman --noconfirm --needed -Sy git nodejs cairo gtk4 libadwaita polkit glib2 glibc libevdev rust sed libgit2 pkgconf icu
+        run: pacman --noconfirm --needed -Syu git nodejs cairo gtk4 libadwaita polkit glib2 glibc libevdev rust sed libgit2 pkgconf icu
 
       - uses: actions/checkout@v4
       - name: Build autoclicker client
