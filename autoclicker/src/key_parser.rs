@@ -35,13 +35,13 @@ enum Token<'a> {
 	Unknown(&'a str),
 }
 
-fn parse_ident(input: &str) -> ParseResult<&str, String> {
+fn parse_ident(input: &str) -> ParseResult<'_, &str, String> {
 	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
 
 	return Ok((res.0, res.1.into()));
 }
 
-fn parse_number(input: &str) -> ParseResult<&str, i64> {
+fn parse_number(input: &str) -> ParseResult<'_, &str, i64> {
 	let res = recognize(preceded(opt(char('-')), many1(terminated(one_of("0123456789"), many0(char('_')))))).parse(input)?;
 
 	let num: i64 = match res.1.parse() {
@@ -57,7 +57,7 @@ fn parse_number(input: &str) -> ParseResult<&str, i64> {
 	return Ok((res.0, num));
 }
 
-fn func(input: &str) -> ParseResult<&str, (String, Vec<Literal>)> {
+fn func(input: &str) -> ParseResult<'_, &str, (String, Vec<Literal>)> {
 	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
 
 	let ident = res.1;
@@ -81,8 +81,8 @@ fn func(input: &str) -> ParseResult<&str, (String, Vec<Literal>)> {
 	return Ok((res.0, (ident.to_string(), res.1)));
 }
 
-fn key(input: &str) -> ParseResult<&str, String> {
-	let res = recognize(pair(alt((alpha1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
+fn key(input: &str) -> ParseResult<'_, &str, String> {
+	let res = recognize(pair(alt((alphanumeric1, tag("_"))), many0(alt((alphanumeric1, tag("_")))))).parse(input)?;
 
 	if keycodes::key_exists(res.1) {
 		return Ok((res.0, res.1.into()));
@@ -134,7 +134,10 @@ fn convert_error(input: &String, err: VerboseError<&str>) -> String {
 				if let Some(actual) = substring.chars().next() {
 					write!(&mut result, "error: expected '{c}', found {actual}\nline:column {line_number}:{column_number}\n{line}\n\n")
 				} else {
-					write!(&mut result, "error: expected '{c}', got end of input\nline:column {line_number}:{column_number}\n{line}\n\n")
+					write!(
+						&mut result,
+						"error: expected '{c}', got end of input\nline:column {line_number}:{column_number}\n{line}\n\n"
+					)
 				}
 			}
 			VerboseErrorKind::Context(ctx) => {
@@ -348,7 +351,7 @@ pub(crate) fn syntax_highlighting(buffer: &gtk4::TextBuffer) {
 	let mut offset: usize = 0;
 	let mut rest: &str = input.as_str();
 
-	fn inner(rest: &str) -> anyhow::Result<(&str, Token)> {
+	fn inner(rest: &str) -> anyhow::Result<(&str, Token<'_>)> {
 		let res = preceded(
 			multispace0,
 			alt((

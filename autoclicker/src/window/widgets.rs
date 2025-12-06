@@ -1,5 +1,6 @@
 use gtk::{
 	ApplicationWindow, EventControllerFocus, Expression, StringList,
+	gio::Notification,
 	glib::{self, clone},
 };
 use gtk4 as gtk;
@@ -96,6 +97,18 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 				crate::shortcuts::start_session(&window).await.unwrap();
 				tracing::trace!("im right here");
 				crate::shortcuts::listen_events(move || {
+					if super::settings().lock().unwrap().client.notification {
+						let not = Notification::new("Autoclicker");
+						if button.label().unwrap() == "Start" {
+							not.set_body(Some("Autoclicker started!"));
+						} else {
+							not.set_body(Some("Autoclicker stopped."));
+						}
+						window
+							.application()
+							.unwrap()
+							.send_notification(Some("dev.land.Autoclicker"), &not);
+					}
 					events::primary_button(&window, &button, clone.clone());
 				})
 				.await
