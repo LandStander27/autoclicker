@@ -125,7 +125,11 @@ pub fn is_ready_to_start(window: &ApplicationWindow) -> bool {
 		#[cfg(not(feature = "dbus"))]
 		{
 			tracing::error!("this build was not compiled with dbus support");
-			glib::MainContext::default().spawn_local(dialogs::error_dialog(window.clone(), "Error: feature missing", "this build was not compiled with dbus support".into()));
+			glib::MainContext::default().spawn_local(dialogs::error_dialog(
+				window.clone(),
+				"Error: feature missing",
+				"this build was not compiled with dbus support".into(),
+			));
 			false
 		}
 	} else {

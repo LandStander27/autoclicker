@@ -29,7 +29,11 @@ pub fn move_mouse(mouse: &Mouse, x: Option<i32>, y: Option<i32>) -> anyhow::Resu
 
 #[inline]
 fn socket_file() -> anyhow::Result<String> {
-	return Ok(format!("{}/hypr/{}/.socket.sock", std::env::var("XDG_RUNTIME_DIR")?, std::env::var("HYPRLAND_INSTANCE_SIGNATURE")?));
+	return Ok(format!(
+		"{}/hypr/{}/.socket.sock",
+		std::env::var("XDG_RUNTIME_DIR")?,
+		std::env::var("HYPRLAND_INSTANCE_SIGNATURE")?
+	));
 }
 
 #[inline]
