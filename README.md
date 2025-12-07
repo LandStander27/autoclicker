@@ -88,7 +88,7 @@ sudo pacman -Rs git rust sed libgit2
 Configuration
 -------------
 
-A configuration file with all defaults is created upon first launch in `$XDG_CONFIG_HOME/cava/config` or `$HOME/.config/cava/config`. Below is a breakdown of each option available.
+A configuration file with all defaults is created upon first launch in `$XDG_CONFIG_HOME/dev.land.autoclicker/config` or `$HOME/.config/dev.land.autoclicker/config`. Below is a breakdown of each option available.
 
 ### `[general]`
 |Option|Description|
