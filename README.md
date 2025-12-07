@@ -99,6 +99,7 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
 |Option|Description|
 |------|-----------|
 | `disable_window_controls` | Disable the minimize/close buttons in the UI. Useful for Hyprland-like setups |
+| `notification` | Send a notification on keybind press |
 
 ### `[daemon]`
 |Option|Description|
