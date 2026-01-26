@@ -25,7 +25,7 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool).
 - Built specifically for Linux (Wayland and X11 compatible)
 
 ## 📦 Installation
-- Read [Hyprland](#Hyprland) after installation, if applicable.
+- Read [Hyprland](#hyprland) after installation, if applicable.
 
 ### 🧪 Arch-based distros (via the landware repo)
 ```sh
