@@ -4,12 +4,12 @@ edition.workspace = true
 version.workspace = true
 
 [features]
-dbus = [ "zbus" ]
-socket = [ "nix" ]
+dbus = ["zbus"]
+socket = ["nix"]
 
 [dependencies]
-signal-hook = "0.3.18"
-evdev-rs = "0.6.2"
+signal-hook = "0.4.3"
+evdev-rs = "0.6.3"
 
 zbus = { workspace = true, optional = true }
 nix = { workspace = true, optional = true }

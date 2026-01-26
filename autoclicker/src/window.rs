@@ -201,7 +201,7 @@ impl Window {
 		window.set_default_size(width, height);
 
 		let css = gtk::CssProvider::new();
-		css.load_from_data(
+		css.load_from_string(
 			r#"
 scrolledwindow > textview.monospace {
 	color: red;

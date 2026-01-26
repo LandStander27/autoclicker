@@ -3,8 +3,8 @@ use anyhow::Context;
 mod versions;
 pub use versions::*;
 
-pub type Settings = v4::Settings;
-pub use v4 as latest;
+pub type Settings = v5::Settings;
+pub use v5 as latest;
 
 macro_rules! generate_trait {
 	($($version:tt),* $(,)?) => {
@@ -57,12 +57,12 @@ macro_rules! generate_whole {
 	};
 }
 
-generate_whole!(v3, v2, v1);
+generate_whole!(v4, v3, v2, v1);
 
 impl Latest for Settings {
 	fn v1(old: v1::Settings) -> Self {
 		return Self {
-			client: v4::ClientSettings {
+			client: latest::ClientSettings {
 				disable_window_controls: old.disable_window_controls,
 				..Default::default()
 			},
@@ -72,22 +72,22 @@ impl Latest for Settings {
 
 	fn v2(old: v2::Settings) -> Self {
 		return Self {
-			general: v4::GeneralSettings {
+			general: latest::GeneralSettings {
 				socket_path: Some(old.general.socket_path),
-				communication_method: v4::Methods::UnixSocket,
+				communication_method: latest::Methods::UnixSocket,
 			},
-			client: v4::ClientSettings {
+			client: latest::ClientSettings {
 				disable_window_controls: old.client.disable_window_controls,
 				..Default::default()
 			},
-			daemon: v4::DaemonSettings {
+			daemon: latest::DaemonSettings {
 				hyprland_ipc: old.daemon.hyprland_ipc,
 				dry_run: old.daemon.dry_run,
-				mouse: v4::MouseSettings {
+				mouse: latest::MouseSettings {
 					added_delay: old.daemon.mouse.added_delay,
 					disabled: old.daemon.mouse.disabled,
 				},
-				keyboard: v4::KeyboardSettings {
+				keyboard: latest::KeyboardSettings {
 					added_delay: old.daemon.keyboard.added_delay,
 					disabled: old.daemon.keyboard.disabled,
 				},
@@ -97,26 +97,56 @@ impl Latest for Settings {
 
 	fn v3(old: v3::Settings) -> Self {
 		return Self {
-			general: v4::GeneralSettings {
+			general: latest::GeneralSettings {
 				socket_path: old.general.socket_path,
 				communication_method: if old.general.communication_method == v3::Methods::DBus {
-					v4::Methods::DBus
+					latest::Methods::DBus
 				} else {
-					v4::Methods::UnixSocket
+					latest::Methods::UnixSocket
 				},
 			},
-			client: v4::ClientSettings {
+			client: latest::ClientSettings {
 				disable_window_controls: old.client.disable_window_controls,
 				..Default::default()
 			},
-			daemon: v4::DaemonSettings {
+			daemon: latest::DaemonSettings {
 				hyprland_ipc: old.daemon.hyprland_ipc,
 				dry_run: old.daemon.dry_run,
-				mouse: v4::MouseSettings {
+				mouse: latest::MouseSettings {
 					added_delay: old.daemon.mouse.added_delay,
 					disabled: old.daemon.mouse.disabled,
 				},
-				keyboard: v4::KeyboardSettings {
+				keyboard: latest::KeyboardSettings {
+					added_delay: old.daemon.keyboard.added_delay,
+					disabled: old.daemon.keyboard.disabled,
+				},
+			},
+		};
+	}
+
+	fn v4(old: v4::Settings) -> Self {
+		return Self {
+			general: latest::GeneralSettings {
+				socket_path: old.general.socket_path,
+				communication_method: if old.general.communication_method == v4::Methods::DBus {
+					latest::Methods::DBus
+				} else {
+					latest::Methods::UnixSocket
+				},
+			},
+			client: latest::ClientSettings {
+				disable_window_controls: old.client.disable_window_controls,
+				notification: old.client.notification,
+				..Default::default()
+			},
+			daemon: latest::DaemonSettings {
+				hyprland_ipc: old.daemon.hyprland_ipc,
+				dry_run: old.daemon.dry_run,
+				mouse: latest::MouseSettings {
+					added_delay: old.daemon.mouse.added_delay,
+					disabled: old.daemon.mouse.disabled,
+				},
+				keyboard: latest::KeyboardSettings {
 					added_delay: old.daemon.keyboard.added_delay,
 					disabled: old.daemon.keyboard.disabled,
 				},

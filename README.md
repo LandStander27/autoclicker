@@ -123,6 +123,7 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
 | `added_delay` | Additional delay added by the daemon for keyboard actions; on top of the delay set by the UI. |
 
 ## 🗒️ Notes
+- Only tested on KDE and Hyprland, but theoretically works on any DE/WM.
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
 - On first activation of the autoclicker, the GUI will prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
   ```sh

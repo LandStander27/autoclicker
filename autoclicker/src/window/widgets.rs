@@ -93,9 +93,7 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 						dialogs::critical_dialog(window.clone(), "Config error", "socket_path must be supplied when communication_method = UnixSocket".into()).await;
 					}
 				}
-				tracing::trace!("im right here");
 				crate::shortcuts::start_session(&window).await.unwrap();
-				tracing::trace!("im right here");
 				crate::shortcuts::listen_events(move || {
 					if super::settings().lock().unwrap().client.notification {
 						let not = Notification::new("Autoclicker");
