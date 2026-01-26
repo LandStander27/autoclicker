@@ -25,7 +25,9 @@ Inspired by [ydotool](https://github.com/ReimuNotMoe/ydotool).
 - Built specifically for Linux (Wayland and X11 compatible)
 
 ## 📦 Installation
-### 🧪 Arch-based distros (via my repo)
+- Read [Hyprland](#Hyprland) after installation, if applicable.
+
+### 🧪 Arch-based distros (via the landware repo)
 ```sh
 # Install pacsync command
 sudo pacman -S --needed pacutils
@@ -93,6 +95,7 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
 ### `[general]`
 |Option|Description|
 |------|-----------|
+| `communication_method` | Method of communication between daemon and client. Can either be "DBus" or "UnixSocket", in which `socket_path` will be used. |
 | `socket_path` | Path to the unix socket used for communication between the daemon and client. `$id` will be replaced by the current UID. |
 
 ### `[client]`
@@ -121,7 +124,7 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
 
 ## 🗒️ Notes
 - The background daemon (`autoclickerd`) runs in user space and is required for listening to global hotkeys and handling low-level input events.
-- On first activation of the autoclicker, the GUI with prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
+- On first activation of the autoclicker, the GUI will prompt you to enable to daemon if it cannot be detected. If you want to start the daemon, as well as setting it to start on boot, without the GUI, run:
   ```sh
   systemctl --user enable --now autoclickerd.service
   ```
@@ -133,10 +136,24 @@ A configuration file with all defaults is created upon first launch in `$XDG_CON
   ```sh
   echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
   
-  # Restart udev, or reboot
+  # Reload udev rules, or just reboot
   sudo udevadm control --reload
   sudo udevadm trigger
   ```
 
 ### Hyprland
-Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for every click.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. See [Daemon](#daemon) to disable.
+- Add this to your Hyprland config to make sure the virtual devices are configured correctly, e.g. at `~/.config/hypr/hyprland.conf`:
+```hyprlang
+device {
+	name = autoclicker-virtual-mouse
+	accel_profile = flat
+}
+
+device {
+	name = autoclicker-virtual-keyboard
+	kb_layout = us
+	kb_variant =
+	kb_options =
+}
+```
+- Because of Wayland limitations, if you have multiple monitors the cursor **might not move to the correct location for every click.** If you use Hyprland, there is a method implemented that fixes this, although it makes clicks ~6ms slower. See [Daemon](#daemon) to disable.
