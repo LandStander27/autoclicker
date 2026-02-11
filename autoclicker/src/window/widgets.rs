@@ -84,33 +84,39 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			#[weak]
 			button,
 			async move {
-				{
+				let disable_global_shortcut = {
 					let settings = super::settings();
 
 					let lock = settings.lock().unwrap();
+					let ret = lock.client.disable_global_shortcut;
 					if lock.general.communication_method == common::settings::latest::Methods::UnixSocket && lock.general.socket_path.is_none() {
 						drop(lock);
 						dialogs::critical_dialog(window.clone(), "Config error", "socket_path must be supplied when communication_method = UnixSocket".into()).await;
 					}
-				}
-				crate::shortcuts::start_session(&window).await.unwrap();
-				crate::shortcuts::listen_events(move || {
-					if super::settings().lock().unwrap().client.notification {
-						let not = Notification::new("Autoclicker");
-						if button.label().unwrap() == "Start" {
-							not.set_body(Some("Autoclicker started!"));
-						} else {
-							not.set_body(Some("Autoclicker stopped."));
+
+					ret
+				};
+
+				if !disable_global_shortcut {
+					crate::shortcuts::start_session(&window).await.unwrap();
+					crate::shortcuts::listen_events(move || {
+						if super::settings().lock().unwrap().client.notification {
+							let not = Notification::new("Autoclicker");
+							if button.label().unwrap() == "Start" {
+								not.set_body(Some("Autoclicker started!"));
+							} else {
+								not.set_body(Some("Autoclicker stopped."));
+							}
+							window
+								.application()
+								.unwrap()
+								.send_notification(Some("dev.land.Autoclicker"), &not);
 						}
-						window
-							.application()
-							.unwrap()
-							.send_notification(Some("dev.land.Autoclicker"), &not);
-					}
-					events::primary_button(&window, &button, clone.clone());
-				})
-				.await
-				.unwrap();
+						events::primary_button(&window, &button, clone.clone());
+					})
+					.await
+					.unwrap();
+				}
 			}
 		));
 	});
