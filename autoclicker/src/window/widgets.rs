@@ -6,8 +6,8 @@ use gtk::{
 use gtk4 as gtk;
 use libadwaita::prelude::*;
 
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
+use std::{ops::Deref, str::FromStr};
 
 use super::{
 	ClickType,
@@ -84,6 +84,9 @@ pub fn start_clicking(window: &ApplicationWindow, config: Arc<Mutex<Config>>) ->
 			#[weak]
 			button,
 			async move {
+				let appid = ashpd::AppID::from_str("dev.land.Autoclicker").unwrap();
+				ashpd::register_host_app(appid).await.unwrap();
+
 				let disable_global_shortcut = {
 					let settings = super::settings();
 
